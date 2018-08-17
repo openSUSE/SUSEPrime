@@ -11,10 +11,6 @@ xorg_conf="/etc/prime/xorg.conf"
 
 function clean_files {
       rm -f /etc/X11/xorg.conf.d/90-nvidia.conf
-      rm -f /etc/ld.so.conf.d/nvidia-libs.conf 
-
-      # Initial file provided by nvidia libs
-      rm -f /etc/ld.so.conf.d/nvidia-gfxG0*.conf   
 }
 
 case $type in
@@ -28,13 +24,6 @@ case $type in
       update-alternatives --set libglx.so $libglx_nvidia
 
       cat $xorg_conf | sed 's/PCI:X:X:X/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-nvidia.conf
-
-      echo "/usr/X11R6/lib64" > /etc/ld.so.conf.d/nvidia-libs.conf
-      echo "/usr/X11R6/lib" >> /etc/ld.so.conf.d/nvidia-libs.conf
-
-      echo "Running ldconfig"
-
-      ldconfig
   ;;
   intel)
       clean_files
@@ -42,10 +31,6 @@ case $type in
       libglx_xorg=`update-alternatives --list libglx.so|grep xorg-libglx.so`
 
       update-alternatives --set libglx.so $libglx_xorg
-
-      echo "Running ldconfig"
-
-      ldconfig
   ;;
   *)
       echo "prime-select nvidia|intel"
