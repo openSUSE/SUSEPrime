@@ -8,13 +8,11 @@
 type=$1
 
 xorg_conf="/etc/prime/xorg.conf"
-offload="/etc/prime/prime-offload.sh"
 
 # nvidia tools need different library path
 export LD_LIBRARY_PATH=/usr/lib64/nvidia/
 
 function clean_files {
-      rm -f /etc/X11/xinit/xinitrc.d/prime-offload.sh
       rm -f /etc/X11/xorg.conf.d/90-nvidia.conf
       rm -f /etc/ld.so.conf.d/nvidia-libs.conf 
 
@@ -28,8 +26,6 @@ case $type in
 
       gpu_info=`nvidia-xconfig --query-gpu-info`
       nvidia_busid=`echo "$gpu_info" |grep -i "PCI BusID"|sed 's/PCI BusID ://'|sed 's/ //g'`
-
-      ln -s $offload /etc/X11/xinit/xinitrc.d/prime-offload.sh
 
       cat $xorg_conf | sed 's/PCI:X:X:X/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-nvidia.conf
 
