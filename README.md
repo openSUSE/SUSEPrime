@@ -4,7 +4,7 @@ OpenSUSE nvidia-prime like package
 Assumptions
 -----------
 
-* You are running OpenSUSE LEAP 42.1
+* You are running OpenSUSE Tumbleweed
 * You don't have bumblebee installed
 * You installed nvidia drivers using http://opensuse-community.org/nvidia.ymp
 
@@ -19,5 +19,5 @@ Contact
 -------
 
 * Bo Simonsen <bo@geekworld.dk>
-
+* Michal Srb <msrb@suse.com>
 

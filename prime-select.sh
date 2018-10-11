@@ -4,6 +4,7 @@
 # Please follow instructions given in README
 
 # Public domain by Bo Simonsen <bo@geekworld.dk>
+# Adapted for OpenSUSE Tumbleweed by Michal Srb <msrb@suse.com>
 
 type=$1
 
