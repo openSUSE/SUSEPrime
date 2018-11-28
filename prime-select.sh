@@ -5,6 +5,7 @@
 
 # Public domain by Bo Simonsen <bo@geekworld.dk>
 # Adapted for OpenSUSE Tumbleweed by Michal Srb <msrb@suse.com>
+# Extended for TUXEDO Computers by Vinzenz Vietzke <vv@tuxedocomputers.com>
 
 type=$1
 
@@ -18,6 +19,11 @@ function clean_files {
 
 case $type in
   nvidia)
+      if [[ $EUID -ne 0 ]]; then
+         echo "This script must be run with root permissions" 2>&1
+         exit 1
+      fi
+
       clean_files 
 
       gpu_info=`nvidia-xconfig --query-gpu-info`
@@ -27,8 +33,14 @@ case $type in
       update-alternatives --set libglx.so $libglx_nvidia
 
       cat $xorg_nvidia_conf | sed 's/PCI:X:X:X/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-nvidia.conf
+      echo "nvidia" > /etc/prime/current_type
   ;;
   intel)
+      if [[ $EUID -ne 0 ]]; then
+         echo "This script must be run with root permissions" 2>&1
+         exit 1
+      fi
+
       clean_files
 
       libglx_xorg=`update-alternatives --list libglx.so|grep xorg-libglx.so`
@@ -36,9 +48,12 @@ case $type in
       update-alternatives --set libglx.so $libglx_xorg
 
       cp $xorg_intel_conf /etc/X11/xorg.conf.d/90-intel.conf
+      echo "intel" > /etc/prime/current_type
   ;;
+  query)
+      echo "Currently running: " && cat /etc/prime/current_type
   *)
-      echo "prime-select nvidia|intel"
+      echo "Usage: prime-select nvidia|intel|query"
       exit
   ;;
 esac
