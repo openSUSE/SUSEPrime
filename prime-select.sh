@@ -51,7 +51,14 @@ case $type in
       echo "intel" > /etc/prime/current_type
   ;;
   query)
-      echo "Currently running: " && cat /etc/prime/current_type
+      if [ -f /etc/prime/current_type ]; then
+         echo -n "Currently running: "
+         cat /etc/prime/current_type
+      else
+         echo -n "Not configured yet! "
+         echo "Please use \"prime-select nvidia|intel\" for configuration."
+      fi
+  ;;
   *)
       echo "Usage: prime-select nvidia|intel|query"
       exit
