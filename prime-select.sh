@@ -27,7 +27,13 @@ case $type in
       clean_files 
 
       gpu_info=`nvidia-xconfig --query-gpu-info`
-      nvidia_busid=`echo "$gpu_info" |grep -i "PCI BusID"|sed 's/PCI BusID ://'|sed 's/ //g'`
+      # This may easily fail, if no NVIDIA kernel module is available or alike
+      if [ $? -ne 0 ]; then
+         echo "PCI BusID of NVIDIA card could not be detected!"
+         exit 1
+      fi
+      # There could be more than on NVIDIA card/GPU; use the first one in that case
+      nvidia_busid=`echo "$gpu_info" |grep -i "PCI BusID"|head -n 1|sed 's/PCI BusID ://'|sed 's/ //g'`
       libglx_nvidia=`update-alternatives --list libglx.so|grep nvidia-libglx.so`
 
       update-alternatives --set libglx.so $libglx_nvidia
