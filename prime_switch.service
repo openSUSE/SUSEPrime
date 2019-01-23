@@ -1,0 +1,14 @@
+# /etc/systemd/system/suse-prime.service
+#
+
+[Unit]
+Description=SUSEPrime switcher service
+After=multi-user.target
+
+[Service]
+Type=forking
+ExecStart=/bin/bash -c "/etc/prime/services/prime_switch"
+ExecStop=
+
+[Install]
+WantedBy=multi-user.target

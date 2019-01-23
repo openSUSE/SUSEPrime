@@ -1,0 +1,61 @@
+#!/bin/bash
+
+if [[ $EUID > 0 ]]
+    then echo "Please run as root"
+    exit
+fi
+
+prime_select="/etc/prime/services/prime-select.sh"
+r3_execute=$(sed -n '1p' /etc/prime/config)
+boot_default=$(sed -n '2p' /etc/prime/config)
+last_session=$(sed -n '3p' /etc/prime/config)
+
+if [ $r3_execute = "1" ]; then
+    while [ `lsmod | grep -o ^nouveau` ]; do
+        rmmod nouveau
+        sleep 0.5s
+    done
+    sed -i '1 c0' /etc/prime/config
+    sed -i '3 cD' /etc/prime/config
+    modprobe nvidia &&  modprobe nvidia_drm &&  modprobe nvidia_modeset &&  modprobe nvidia_uvm
+    bash $prime_select nvidia
+    systemctl isolate graphical.target
+
+elif [ $r3_execute = "2" ]; then 
+    bash $prime_select intel
+    sed -i '1 c0' /etc/prime/config
+    sed -i '3 cI' /etc/prime/config
+    while [ `lsmod | grep -o ^'nvidia '` ]; do
+        rmmod nvidia_uvm
+        rmmod nvidia_drm
+        rmmod nvidia_modeset
+        rmmod nvidia
+        sleep 0.5s
+    done
+    modprobe nouveau 
+    systemctl isolate graphical.target
+
+elif [ $r3_execute = "0" ]; then
+    if [ $boot_default = "I" ]; then
+        modprobe nouveau
+        bash $prime_select intel
+        sed -i '3 cI' /etc/prime/config
+
+    elif [ $boot_default = "D" ]; then
+        sed -i '3 cD' /etc/prime/config
+        modprobe nvidia &&  modprobe nvidia_drm &&  modprobe nvidia_modeset &&  modprobe nvidia_uvm
+        bash $prime_select nvidia
+    
+    elif [ $boot_default = "L" ]; then
+        if [ $last_session = "I" ]; then
+            modprobe nouveau
+            bash $prime_select intel
+
+        elif [ $last_session = "D" ]; then
+            modprobe nvidia &&  modprobe nvidia_drm &&  modprobe nvidia_modeset &&  modprobe nvidia_uvm
+            bash $prime_select nvidia
+        fi
+    fi
+    sed -i '1 c0' /etc/prime/config
+    #nothing_to_do
+fi
