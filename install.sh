@@ -25,7 +25,7 @@ function setup
     chmod +x /etc/prime/services/prime_switch
     chmod +x /etc/prime/services/prime_logout.waiting
     chmod +x /etc/prime/services/prime-select.sh
-    chmod +x /usr/bin/vga
+    chmod +x /usr/bin/prime
     echo "Done."
   
     #Service
