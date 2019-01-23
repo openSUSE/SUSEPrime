@@ -5,6 +5,7 @@
 
 # Public domain by Bo Simonsen <bo@geekworld.dk>
 # Adapted for OpenSUSE Tumbleweed by Michal Srb <msrb@suse.com>
+# Extended for TUXEDO Computers by Vinzenz Vietzke <vv@tuxedocomputers.com>
 # Augmented by bubbleguuum <bubbleguuum@free.fr>
 
 type=$1
@@ -24,7 +25,7 @@ function usage {
     echo "nvidia: use the NVIDIA binary driver"
     echo "unset: disable effects of this script and let Xorg decide what driver to use"
     echo "get-current: display driver currently in use by this tool"
-    echo "apply-current: re-apply this script using previously set driver (used by better-prime-select systemd service)"
+    echo "apply-current: re-apply this script using previously set driver (used by prime-select systemd service)"
     echo
 }
 

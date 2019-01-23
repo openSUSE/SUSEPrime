@@ -56,8 +56,8 @@ This will also blacklist the `nouveau` module which can really get in the way wi
 ### Install the systemd service for loading NVIDIA module when needed
 
 ```
-cp /etc/prime/better-prime-select.service /usr/lib/systemd/system
-systemctl enable better-prime-select
+cp /etc/prime/prime-select.service /usr/lib/systemd/system
+systemctl enable prime-select
 ```
 
 This service calls prime-select with whatever driver was previously set by user.
@@ -69,7 +69,7 @@ Moreover, if an intel config is set but the Intel card was disabled in BIOS (lea
 
 ### What are the script parameters to select a driver ?
 
-better-prime-select `<driver>`
+prime-select `<driver>`
 
 Where `driver` is one of:
 
@@ -94,7 +94,7 @@ sudo init 3
 Use the script to change driver:
 
 ```
-better-prime-select intel
+prime-select intel
 ```
 
 Restart in run level 5 (graphical mode) with the new driver:
