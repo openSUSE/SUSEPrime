@@ -1,0 +1,10 @@
+[Unit]
+Description=Prime Select Service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=prime-select apply-current
+
+[Install]
+WantedBy=graphical.target
