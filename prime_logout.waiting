@@ -1,7 +1,0 @@
-#!/bin/bash
-
-while (( $(ps -p `pidof X` -o etimes=) > 3 )); do
-    sleep 1s
-done
-sleep 1s
-sudo systemctl isolate multi-user.target
