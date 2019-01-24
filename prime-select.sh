@@ -160,7 +160,7 @@ EOF
             cat /etc/prime/current_type
       	else
             echo "No driver configured."
-            echo "Use \"`basename $0` $driver_choices\" for configuration."
+            usage
 	fi
 	;;
 
