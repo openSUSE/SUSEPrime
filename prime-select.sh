@@ -170,6 +170,7 @@ case $type in
     
     nvidia)
     
+    check_root
     echo "$type" > /etc/prime/current_type
     systemctl enable prime-select &> /dev/null
     systemctl disable prime-boot-selector &> /dev/null
@@ -179,6 +180,7 @@ case $type in
     
     intel)
     
+    check_root
     echo "$type" > /etc/prime/current_type
     systemctl enable prime-select &> /dev/null
     systemctl disable prime-boot-selector &> /dev/null
@@ -188,6 +190,7 @@ case $type in
     
     intel2)
     
+    check_root
     echo "$type" > /etc/prime/current_type
     systemctl enable prime-select &> /dev/null
     systemctl disable prime-boot-selector &> /dev/null
@@ -196,9 +199,10 @@ case $type in
 	;;
     
     boot)
-	    case $2 in
+        check_root
+	case $2 in
 	    
-	    nvidia|intel|intel2)
+            nvidia|intel|intel2)
 	    
 	    echo "$2" > /etc/prime/boot
 	    echo "Default at system boot: "
