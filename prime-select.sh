@@ -7,8 +7,10 @@
 # Adapted for OpenSUSE Tumbleweed by Michal Srb <msrb@suse.com>
 # Extended for TUXEDO Computers by Vinzenz Vietzke <vv@tuxedocomputers.com>
 # Augmented by bubbleguuum <bubbleguuum@free.fr>
+# Improved by simopil <pilia.simone96@gmail.com>
 
 type=$1
+booting=false
 xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
@@ -19,13 +21,17 @@ lspci_intel_line="VGA compatible controller: Intel"
 function usage {
     echo
     echo "usage: `basename $0` $driver_choices|unset|get-current|apply-current"
+    echo "usage: `basename $0` boot $driver_choices|last"
     echo
     echo "intel: use the Intel card with the modesetting driver"
     echo "intel2: use the Intel card with the Intel open-source driver (xf86-video-intel). If you use this driver in a Plasma session, make sure to first disable vsync in the Plasma compositor settings to prevent video corruption"
     echo "nvidia: use the NVIDIA binary driver"
+    echo "boot: select default card at boot or set last used"
     echo "unset: disable effects of this script and let Xorg decide what driver to use"
     echo "get-current: display driver currently in use by this tool"
-    echo "apply-current: re-apply this script using previously set driver (used by prime-select systemd service)"
+    echo "apply-current: re-apply this script using previously set driver [DO NOT USE IT] (used by prime-select systemd service)"
+    echo "user_logout_waiter: waits user logout [DO NOT USE IT] (used by prime-select systemd service)"
+    echo "prime_booting: sets correct card during boot (used by prime-boot-selector systemd service)"
     echo
 }
 
@@ -41,81 +47,65 @@ function clean_files {
     rm -f /etc/X11/xorg.conf.d/90-intel.conf
 }
 
-case $type in
-    
-    apply-current)
+function set_nvidia {
+    check_root
 	
-        if [ -f /etc/prime/current_type ]; then
-            
-            current_type=`cat /etc/prime/current_type`
-            
-            if [ "$current_type" != "nvidia"  ] && ! lspci | grep "$lspci_intel_line" > /dev/null; then
-                
-                # this can happen if user set intel but changed to "Discrete only" in BIOS
-                # in that case the Intel card is not visible to the system and we must switch to nvidia
-                
-                echo "Forcing nvidia due to Intel card not found"
-                current_type="nvidia"
-            fi
-            
-            $0 $current_type
-        fi
-        ;;
-    
-    nvidia)
-
-	check_root
-	
-	if [ -f /proc/acpi/bbswitch ]; then        
-            tee /proc/acpi/bbswitch > /dev/null <<EOF
+    if [ -f /proc/acpi/bbswitch ]; then        
+        tee /proc/acpi/bbswitch > /dev/null <<EOF
 ON
 EOF
-	fi
+    fi
 
-	# will load all other dependency modules
-	modprobe nvidia_drm
-        
-	gpu_info=`nvidia-xconfig --query-gpu-info`
-	# This may easily fail, if no NVIDIA kernel module is available or alike
-	if [ $? -ne 0 ]; then
-            echo "PCI BusID of NVIDIA card could not be detected!"
-            exit 1
-	fi
-	
-	# There could be more than on NVIDIA card/GPU; use the first one in that case
-
-	nvidia_busid=`echo "$gpu_info" |grep -i "PCI BusID"|head -n 1|sed 's/PCI BusID ://'|sed 's/ //g'`
-
-	libglx_nvidia=`update-alternatives --list libglx.so|grep nvidia-libglx.so`
-
-	update-alternatives --set libglx.so $libglx_nvidia > /dev/null
-
-	clean_files
-
-	cat $xorg_nvidia_conf | sed 's/PCI:X:X:X/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-nvidia.conf
-
-	echo "$type" > /etc/prime/current_type     
-
-	$0 get-current
-	;;
+    # will load all other dependency modules
+    modprobe nvidia_drm
     
-    intel|intel2)
-
-	check_root
+    gpu_info=`nvidia-xconfig --query-gpu-info`
+        # This may easily fail, if no NVIDIA kernel module is available or alike
+    if [ $? -ne 0 ]; then
+        echo "PCI BusID of NVIDIA card could not be detected!"
+        exit 1
+    fi
 	
-	if [ "$type" = "intel2" ]; then
-            if ! rpm -q xf86-video-intel > /dev/null; then
+    # There could be more than on NVIDIA card/GPU; use the first one in that case
+
+    nvidia_busid=`echo "$gpu_info" |grep -i "PCI BusID"|head -n 1|sed 's/PCI BusID ://'|sed 's/ //g'`
+
+    libglx_nvidia=`update-alternatives --list libglx.so|grep nvidia-libglx.so`
+
+    update-alternatives --set libglx.so $libglx_nvidia > /dev/null
+
+    clean_files
+
+    cat $xorg_nvidia_conf | sed 's/PCI:X:X:X/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-nvidia.conf
+
+    echo "nvidia" > /etc/prime/current_type
+    
+    $0 get-current
+}
+
+function set_intel {
+    check_root
+    # modesetting driver is part of xorg-x11-server and always available
+    conf=$xorg_intel_conf_intel
+    echo "intel" > /etc/prime/current_type
+    #jump to common function intel1/intel2
+    common_set_intel
+}
+    
+function set_intel2 {
+    check_root
+    if ! rpm -q xf86-video-intel > /dev/null; then
 		echo "package xf86-video-intel is not installed";
 		exit 1
-            fi
-            
-            conf=$xorg_intel_conf_intel2
-	else
-            # modesetting driver is part of xorg-x11-server and always available
-            conf=$xorg_intel_conf_intel
-	fi
+    fi
+    conf=$xorg_intel_conf_intel2
+    echo "intel2" > /etc/prime/current_type
+    #jump to common function intel1/intel2
+    common_set_intel
+}
 
-	# find Intel card bus id. Without this Xorg may fail to start
+function common_set_intel {
+    # find Intel card bus id. Without this Xorg may fail to start
 	line=`lspci | grep "$lspci_intel_line" | head -1`
 	if [ $? -ne 0 ]; then
             echo "Failed to find Intel card with lspci"
@@ -148,11 +138,87 @@ EOF
             rpm -q bbswitch > /dev/null || echo "bbswitch is not installed. NVIDIA card will not be powered off"
 	fi
 	
-	echo "$type" > /etc/prime/current_type
-
 	$0 get-current
+}
+
+case $type in
+    
+    apply-current)
+	
+        if [ -f /etc/prime/current_type ]; then
+            
+            current_type=`cat /etc/prime/current_type`
+            
+            if [ "$current_type" != "nvidia"  ] && ! lspci | grep "$lspci_intel_line" > /dev/null; then
+                
+                # this can happen if user set intel but changed to "Discrete only" in BIOS
+                # in that case the Intel card is not visible to the system and we must switch to nvidia
+                
+                echo "Forcing nvidia due to Intel card not found"
+                current_type="nvidia"
+            fi
+            
+            set_$current_type
+            
+            if [ "$booting" = false ]; then
+                systemctl disable prime-select
+                systemctl isolate graphical.target
+                systemctl enable prime-boot-selector
+            fi
+        fi
+    ;;
+    
+    nvidia)
+    
+    echo "$type" > /etc/prime/current_type
+    systemctl enable prime-select &> /dev/null
+    systemctl disable prime-boot-selector &> /dev/null
+    $0 user_logout_waiter &
+	echo -e "Logout to switch graphics"
 	;;
     
+    intel)
+    
+    echo "$type" > /etc/prime/current_type
+    systemctl enable prime-select &> /dev/null
+    systemctl disable prime-boot-selector &> /dev/null
+    $0 user_logout_waiter &
+    echo -e "Logout to switch graphics"
+    ;;
+    
+    intel2)
+    
+    echo "$type" > /etc/prime/current_type
+    systemctl enable prime-select &> /dev/null
+    systemctl disable prime-boot-selector &> /dev/null
+    $0 user_logout_waiter &
+    echo -e "Logout to switch graphics"
+	;;
+    
+    boot)
+	    case $2 in
+	    
+	    nvidia|intel|intel2)
+	    
+	    echo "$2" > /etc/prime/boot
+	    echo "Default at system boot: "
+	    cat /etc/prime/boot
+	    ;;
+	    
+	    last)
+	    
+	    echo "$2" > /etc/prime/boot
+	    echo "Default at system boot: last"
+	    ;;
+	    
+	    *)
+	    
+	    echo "Invalid choice"
+	    usage
+	    ;;
+	    esac
+	;;
+	
     get-current)
 	
 	if [ -f /etc/prime/current_type ]; then
@@ -172,6 +238,27 @@ EOF
 	rm /etc/prime/current_type
 	;;
 
+	user_logout_waiter)
+	#waits X process has an elapsed time < 3seconds, then jump init 3
+	while (( $(ps -p `pidof X` -o etimes=) > 3 )); do
+    sleep 1s
+    done
+    systemctl isolate multi-user.target
+	;;
+	
+	prime_booting)
+	#called by prime-boot-selector service
+	booting=true
+	if [ -f /etc/prime/boot ]; then
+    	boot_type=`cat /etc/prime/boot`
+	    if [ "$boot_type" != "last" ]; then
+            echo "$boot_type" > /etc/prime/current_type
+        fi
+    fi
+    $0 apply-current
+    booting=false
+	;;
+	
     *)
 	usage
 	;;
