@@ -251,8 +251,9 @@ case $type in
 	;;
 
 	user_logout_waiter)
-	#waits X process has an elapsed time < 3seconds, then jump init 3
-	while (( $(ps -p `pidof X` -o etimes=) > 3 )); do
+	#manage md5 sum xorg logs to check when X restarted, then jump init 3
+	logsum=$(md5sum /var/log/Xorg.0.log.old | awk '{print $1}')
+	while [ $logsum == $(md5sum /var/log/Xorg.0.log.old | awk '{print $1}') ]; do
     sleep 1s
     done
     systemctl enable prime-select &> /dev/null
