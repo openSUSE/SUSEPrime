@@ -10,7 +10,6 @@
 # Improved by simopil <pilia.simone96@gmail.com>
 
 type=$1
-booting=false
 xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
@@ -154,7 +153,8 @@ function apply_current {
             
             set_$current_type
             
-            if [ "$booting" = false ]; then
+            if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
+                echo "N" > /etc/prime/boot_state
                 systemctl disable prime-select
                 systemctl enable prime-boot-selector
                 systemctl isolate graphical.target
@@ -256,22 +256,29 @@ case $type in
 	while [ $logsum == $(md5sum /var/log/Xorg.0.log.old | awk '{print $1}') ]; do
     sleep 1s
     done
-    systemctl enable prime-select &> /dev/null
-    systemctl disable prime-boot-selector &> /dev/null
+    echo "S" > /etc/prime/boot_state
+    systemctl enable prime-select
+    systemctl disable prime-boot-selector
     systemctl isolate multi-user.target
 	;;
 	
 	prime_booting)
 	#called by prime-boot-selector service
-	booting=true
-	if [ -f /etc/prime/boot ]; then
-    	boot_type=`cat /etc/prime/boot`
-	    if [ "$boot_type" != "last" ]; then
-            echo "$boot_type" > /etc/prime/current_type
-        fi
+	if ! [ -f /etc/prime/boot_state ]; then
+	    echo "B" > /etc/prime/boot_state
     fi
+	if [ "$(cat /etc/prime/boot_state)" = "N" ]; then
+	    echo "Useless call caused by isolating graphical.target, ignoring"
+	    echo "B" > /etc/prime/boot_state
+    else
+	    if [ -f /etc/prime/boot ]; then
+    	    boot_type=`cat /etc/prime/boot`
+	        if [ "$boot_type" != "last" ]; then
+                echo "$boot_type" > /etc/prime/current_type
+            fi
+        fi
     apply_current
-    booting=false
+    fi
 	;;
 	
 	get-boot)
