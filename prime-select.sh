@@ -13,6 +13,7 @@ type=$1
 xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
+xorg_logfile="/var/log/Xorg.0.log.old"
 nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2"
 lspci_intel_line="VGA compatible controller: Intel"
@@ -138,29 +139,36 @@ EOF
 }
 
 function apply_current {
-       if [ -f /etc/prime/current_type ]; then
+    if [ -f /etc/prime/current_type ]; then
             
-            current_type=`cat /etc/prime/current_type`
+        current_type=`cat /etc/prime/current_type`
             
-            if [ "$current_type" != "nvidia"  ] && ! lspci | grep "$lspci_intel_line" > /dev/null; then
+        if [ "$current_type" != "nvidia"  ] && ! lspci | grep "$lspci_intel_line" > /dev/null; then
                 
-                # this can happen if user set intel but changed to "Discrete only" in BIOS
-                # in that case the Intel card is not visible to the system and we must switch to nvidia
+            # this can happen if user set intel but changed to "Discrete only" in BIOS
+            # in that case the Intel card is not visible to the system and we must switch to nvidia
                 
-                echo "Forcing nvidia due to Intel card not found"
-                current_type="nvidia"
-            fi
-            
-            set_$current_type
-            
-            if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
-                echo "N" > /etc/prime/boot_state
-                systemctl disable prime-select
-                systemctl enable prime-boot-selector
-                systemctl isolate graphical.target
-            fi
+            echo "Forcing nvidia due to Intel card not found"
+            current_type="nvidia"
         fi
+            
+        set_$current_type
+            
+        if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
+            echo "N" > /etc/prime/boot_state
+            systemctl disable prime-select
+            systemctl enable prime-boot-selector
+            systemctl isolate graphical.target
+        fi
+    fi
  
+}
+
+function current_check {
+    if [ "$type" = "$(cat /etc/prime/current_type)" ]; then
+        echo "$type driver already in use!"
+        exit
+    fi
 }
 
 case $type in
@@ -172,6 +180,7 @@ case $type in
     nvidia)
     
     check_root
+    current_check
     echo "$type" > /etc/prime/current_type
     $0 user_logout_waiter &
 	echo -e "Logout to switch graphics"
@@ -180,6 +189,7 @@ case $type in
     intel)
     
     check_root
+    current_check
     echo "$type" > /etc/prime/current_type
     $0 user_logout_waiter &
     echo -e "Logout to switch graphics"
@@ -188,6 +198,7 @@ case $type in
     intel2)
     
     check_root
+    current_check
     if ! rpm -q xf86-video-intel > /dev/null; then
 		echo "package xf86-video-intel is not installed";
 		exit 1
@@ -248,12 +259,14 @@ case $type in
 	
 	clean_files
 	rm /etc/prime/current_type
+	rm /etc/prime/boot_state
+	rm /etc/prime/boot
 	;;
 
 	user_logout_waiter)
 	#manage md5 sum xorg logs to check when X restarted, then jump init 3
-	logsum=$(md5sum /var/log/Xorg.0.log.old | awk '{print $1}')
-	while [ $logsum == $(md5sum /var/log/Xorg.0.log.old | awk '{print $1}') ]; do
+	logsum=$(md5sum $xorg_logfile | awk '{print $1}')
+	while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
     sleep 1s
     done
     echo "S" > /etc/prime/boot_state
@@ -283,7 +296,7 @@ case $type in
 	
 	get-boot)
 	if [ -f /etc/prime/boot ]; then
-	    echo "Default at system boot: "
+	    echo -n "Default at system boot: "
         cat /etc/prime/boot
     else
         echo "Default at system boot: auto (last)"
