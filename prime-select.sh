@@ -20,7 +20,7 @@ lspci_intel_line="VGA compatible controller: Intel"
 
 function usage {
     echo
-    echo "usage: `basename $0` $driver_choices|unset|get-current|get-boot|apply-current"
+    echo "usage: `basename $0` $driver_choices|unset|get-current|get-boot"
     echo "usage: `basename $0` boot $driver_choices|last"
     echo
     echo "intel: use the Intel card with the modesetting driver"
@@ -32,7 +32,7 @@ function usage {
     echo "get-current: display driver currently in use by this tool"
     echo "apply-current: re-apply this script using previously set driver [DO NOT USE IT] (used by prime-select systemd service)"
     echo "user_logout_waiter: waits user logout [DO NOT USE IT] (used by prime-select systemd service)"
-    echo "prime_booting: sets correct card during boot (used by prime-boot-selector systemd service)"
+    echo "prime_booting: sets correct card during boot [DO NOT USE IT] (used by prime-boot-selector systemd service)"
     echo
 }
 
@@ -174,137 +174,143 @@ function current_check {
 case $type in
     
     apply-current)
+    
 	    apply_current
     ;;
     
     nvidia)
     
-    check_root
-    current_check
-    echo "$type" > /etc/prime/current_type
-    $0 user_logout_waiter &
-	echo -e "Logout to switch graphics"
+        check_root
+        current_check
+        echo "$type" > /etc/prime/current_type
+        $0 user_logout_waiter &
+	    echo -e "Logout to switch graphics"
 	;;
     
     intel)
     
-    check_root
-    current_check
-    echo "$type" > /etc/prime/current_type
-    $0 user_logout_waiter &
-    echo -e "Logout to switch graphics"
+        check_root
+        current_check
+        echo "$type" > /etc/prime/current_type
+        $0 user_logout_waiter &
+        echo -e "Logout to switch graphics"
     ;;
     
     intel2)
     
-    check_root
-    current_check
-    if ! rpm -q xf86-video-intel > /dev/null; then
-		echo "package xf86-video-intel is not installed";
-		exit 1
-    fi
-    echo "$type" > /etc/prime/current_type
-    $0 user_logout_waiter &
-    echo -e "Logout to switch graphics"
-	;;
-    
-    boot)
         check_root
-	case $2 in
-	    
-        nvidia|intel)
-	    
-	    echo "$2" > /etc/prime/boot
-        $0 get-boot
-	    ;;
-	    
-	    intel2)
-	    
+        current_check
         if ! rpm -q xf86-video-intel > /dev/null; then
 		    echo "package xf86-video-intel is not installed";
 		    exit 1
         fi
-	    echo "$2" > /etc/prime/boot
-        $0 get-boot
-        ;;
-        
-	    last)
-	    
-	    echo "$2" > /etc/prime/boot
-	    $0 get-boot
-	    ;;
-	    
-	    *)
-	    
-	    echo "Invalid choice"
-	    usage
-	    ;;
-	    esac
+        echo "$type" > /etc/prime/current_type
+        $0 user_logout_waiter &
+        echo -e "Logout to switch graphics"
 	;;
+    
+    boot)
+    
+        check_root
+	
+	    case $2 in
+	    
+            nvidia|intel)
+	    
+	            echo "$2" > /etc/prime/boot
+                $0 get-boot
+	        ;;
+	    
+	        intel2)
+	    
+            if ! rpm -q xf86-video-intel > /dev/null; then
+		        echo "package xf86-video-intel is not installed";
+		        exit 1
+            fi
+	        echo "$2" > /etc/prime/boot
+            $0 get-boot
+            ;;
+        
+	        last)
+	    
+	        echo "$2" > /etc/prime/boot
+	        $0 get-boot
+	        ;;
+	    
+	        *)
+	    
+	        echo "Invalid choice"
+	        usage
+	        ;;
+        esac
+    ;;
 	
     get-current)
 	
-	if [ -f /etc/prime/current_type ]; then
+	    if [ -f /etc/prime/current_type ]; then
             echo -n "Driver configured: "
             cat /etc/prime/current_type
       	else
             echo "No driver configured."
             usage
-	fi
+	    fi
 	;;
 
     unset)
 
-	check_root
+	    check_root
 	
-	clean_files
-	rm /etc/prime/current_type
-	rm /etc/prime/boot_state
-	rm /etc/prime/boot
+	    clean_files
+	    rm /etc/prime/current_type
+	    rm /etc/prime/boot_state
+	    rm /etc/prime/boot
 	;;
 
 	user_logout_waiter)
-	#manage md5 sum xorg logs to check when X restarted, then jump init 3
-	logsum=$(md5sum $xorg_logfile | awk '{print $1}')
-	while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
-    sleep 1s
-    done
-    echo "S" > /etc/prime/boot_state
-    systemctl enable prime-select
-    systemctl disable prime-boot-selector
-    systemctl isolate multi-user.target
+	
+	    #manage md5 sum xorg logs to check when X restarted, then jump init 3
+	    logsum=$(md5sum $xorg_logfile | awk '{print $1}')
+	    while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
+            sleep 1s
+        done
+        echo "S" > /etc/prime/boot_state
+        systemctl enable prime-select
+        systemctl disable prime-boot-selector
+        systemctl isolate multi-user.target
 	;;
 	
 	prime_booting)
-	#called by prime-boot-selector service
-	if ! [ -f /etc/prime/boot_state ]; then
-	    echo "B" > /etc/prime/boot_state
-    fi
-	if [ "$(cat /etc/prime/boot_state)" = "N" ]; then
-	    echo "Useless call caused by isolating graphical.target, ignoring"
-	    echo "B" > /etc/prime/boot_state
-    else
+	
+        #called by prime-boot-selector service
+        if ! [ -f /etc/prime/boot_state ]; then
+            echo "B" > /etc/prime/boot_state
+        fi
+        if [ "$(cat /etc/prime/boot_state)" = "N" ]; then
+            echo "Useless call caused by isolating graphical.target, ignoring"
+            echo "B" > /etc/prime/boot_state
+        else
 	    if [ -f /etc/prime/boot ]; then
     	    boot_type=`cat /etc/prime/boot`
 	        if [ "$boot_type" != "last" ]; then
                 echo "$boot_type" > /etc/prime/current_type
             fi
         fi
-    apply_current
-    fi
+        apply_current
+        fi
 	;;
 	
 	get-boot)
-	if [ -f /etc/prime/boot ]; then
-	    echo -n "Default at system boot: "
-        cat /etc/prime/boot
-    else
-        echo "Default at system boot: auto (last)"
-        echo "You can configure it with prime-select boot intel|intel2|nvidia|last"
-    fi
+	
+        if [ -f /etc/prime/boot ]; then
+            echo -n "Default at system boot: "
+            cat /etc/prime/boot
+        else
+            echo "Default at system boot: auto (last)"
+            echo "You can configure it with prime-select boot intel|intel2|nvidia|last"
+        fi
 	;;
 	
     *)
-	usage
+        usage
 	;;
 esac
