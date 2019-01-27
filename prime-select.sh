@@ -14,13 +14,14 @@ xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
 xorg_logfile="/var/log/Xorg.0.log.old"
+prime_logfile="/var/log/prime-select.log"
 nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2"
 lspci_intel_line="VGA compatible controller: Intel"
 
 function usage {
     echo
-    echo "usage: `basename $0` $driver_choices|unset|get-current|get-boot"
+    echo "usage: `basename $0` $driver_choices|unset|get-current|get-boot|log-view|log-clean"
     echo "usage: `basename $0` boot $driver_choices|last"
     echo
     echo "intel: use the Intel card with the modesetting driver"
@@ -28,12 +29,26 @@ function usage {
     echo "nvidia: use the NVIDIA binary driver"
     echo "boot: select default card at boot or set last used"
     echo "get-boot: display default card at boot"
+    echo "log-view: view switching logfile to se errors or debug"
+    echo "log-clean: clean logfile"
     echo "unset: disable effects of this script and let Xorg decide what driver to use"
     echo "get-current: display driver currently in use by this tool"
     echo "apply-current: re-apply this script using previously set driver [DO NOT USE IT] (used by prime-select systemd service)"
     echo "user_logout_waiter: waits user logout [DO NOT USE IT] (used by prime-select systemd service)"
     echo "prime_booting: sets correct card during boot [DO NOT USE IT] (used by prime-boot-selector systemd service)"
     echo
+}
+
+function logging {
+    if ! [ -f $prime_logfile ]; then 
+        echo "##SUSEPrime logfile##" > $prime_logfile
+    elif [ $(wc -l < $prime_logfile) -gt 1000 ]; then
+        #cleaning logfile if has more than 1k events
+        rm $prime_logfile
+        echo "##SUSEPrime logfile##" > $prime_logfile
+    fi
+    local logentry=${1}
+    echo "[ $(date +"%H:%M:%S") ] $logentry" >> $prime_logfile
 }
 
 function check_root {
@@ -63,7 +78,7 @@ EOF
     gpu_info=`nvidia-xconfig --query-gpu-info`
         # This may easily fail, if no NVIDIA kernel module is available or alike
     if [ $? -ne 0 ]; then
-        echo "PCI BusID of NVIDIA card could not be detected!"
+        logging "PCI BusID of NVIDIA card could not be detected!"
         exit 1
     fi
 	
@@ -80,6 +95,7 @@ EOF
     cat $xorg_nvidia_conf | sed 's/PCI:X:X:X/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-nvidia.conf
 
     echo "nvidia" > /etc/prime/current_type
+    logging "Nvidia card correctly set"
     
     $0 get-current
 }
@@ -105,14 +121,14 @@ function common_set_intel {
     # find Intel card bus id. Without this Xorg may fail to start
 	line=`lspci | grep "$lspci_intel_line" | head -1`
 	if [ $? -ne 0 ]; then
-            echo "Failed to find Intel card with lspci"
-            exit 1
+        logging "Failed to find Intel card with lspci"
+        exit 1
 	fi
 
 	intel_busid=`echo $line | cut -f 1 -d ' ' | sed -e 's/\./:/g;s/:/ /g' | awk -Wposix '{printf("PCI:%d:%d:%d\n","0x" $1, "0x" $2, "0x" $3 )}'`
 	if [ $? -ne 0 ]; then
-            echo "Failed to build Intel card bus id"
-            exit 1
+        logging "Failed to build Intel card bus id"
+        exit 1
 	fi
 	
 	libglx_xorg=`update-alternatives --list libglx.so|grep xorg-libglx.so`
@@ -126,14 +142,16 @@ function common_set_intel {
 	modprobe -r $nvidia_modules
 
 	if [ -f /proc/acpi/bbswitch ]; then        
-            tee /proc/acpi/bbswitch > /dev/null <<EOF 
+        tee /proc/acpi/bbswitch > /dev/null <<EOF 
 OFF
 EOF
-            grep OFF /proc/acpi/bbswitch > /dev/null || echo "Failed to power off NVIDIA card"
+        grep OFF /proc/acpi/bbswitch > /dev/null || logging "Failed to power off NVIDIA card"
 
 	else
-            rpm -q bbswitch > /dev/null || echo "bbswitch is not installed. NVIDIA card will not be powered off"
+        rpm -q bbswitch > /dev/null || logging "bbswitch is not installed. NVIDIA card will not be powered off"
 	fi
+	
+	logging "Intel card correctly set"
 	
 	$0 get-current
 }
@@ -148,16 +166,19 @@ function apply_current {
             # this can happen if user set intel but changed to "Discrete only" in BIOS
             # in that case the Intel card is not visible to the system and we must switch to nvidia
                 
-            echo "Forcing nvidia due to Intel card not found"
+            logging "Forcing nvidia due to Intel card not found"
             current_type="nvidia"
+            logging "Nvidia card correctly set"
         fi
             
         set_$current_type
             
         if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
             echo "N" > /etc/prime/boot_state
+            logging "setting boot_status to N, reenabling prime-boot-selector"
             systemctl disable prime-select
             systemctl enable prime-boot-selector
+            logging "Reaching graphical.target"
             systemctl isolate graphical.target
         fi
     fi
@@ -183,6 +204,7 @@ case $type in
         check_root
         current_check
         echo "$type" > /etc/prime/current_type
+        logging "user_logout_waiter: started"
         $0 user_logout_waiter &
 	    echo -e "Logout to switch graphics"
 	;;
@@ -192,6 +214,7 @@ case $type in
         check_root
         current_check
         echo "$type" > /etc/prime/current_type
+        logging "user_logout_waiter: started"
         $0 user_logout_waiter &
         echo -e "Logout to switch graphics"
     ;;
@@ -205,6 +228,7 @@ case $type in
 		    exit 1
         fi
         echo "$type" > /etc/prime/current_type
+        logging "user_logout_waiter: started"
         $0 user_logout_waiter &
         echo -e "Logout to switch graphics"
 	;;
@@ -223,24 +247,24 @@ case $type in
 	    
 	        intel2)
 	    
-            if ! rpm -q xf86-video-intel > /dev/null; then
-		        echo "package xf86-video-intel is not installed";
-		        exit 1
-            fi
-	        echo "$2" > /etc/prime/boot
-            $0 get-boot
+                if ! rpm -q xf86-video-intel > /dev/null; then
+                    echo "package xf86-video-intel is not installed";
+                    exit 1
+                fi
+                echo "$2" > /etc/prime/boot
+                $0 get-boot
             ;;
         
 	        last)
 	    
-	        echo "$2" > /etc/prime/boot
-	        $0 get-boot
-	        ;;
+                echo "$2" > /etc/prime/boot
+                $0 get-boot
+            ;;
 	    
 	        *)
 	    
-	        echo "Invalid choice"
-	        usage
+                echo "Invalid choice"
+                usage
 	        ;;
         esac
     ;;
@@ -264,6 +288,7 @@ case $type in
 	    rm /etc/prime/current_type
 	    rm /etc/prime/boot_state
 	    rm /etc/prime/boot
+	    rm $prime_logfile
 	;;
 
 	user_logout_waiter)
@@ -273,9 +298,11 @@ case $type in
 	    while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
             sleep 1s
         done
+        logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and setting boot_state to S"
         echo "S" > /etc/prime/boot_state
         systemctl enable prime-select
         systemctl disable prime-boot-selector
+        logging "Reaching multi-user.target"
         systemctl isolate multi-user.target
 	;;
 	
@@ -286,7 +313,7 @@ case $type in
             echo "B" > /etc/prime/boot_state
         fi
         if [ "$(cat /etc/prime/boot_state)" = "N" ]; then
-            echo "Useless call caused by isolating graphical.target, ignoring"
+            logging "prime-boot-selector: useless call caused by isolating graphical.target, setting boot_state to B"
             echo "B" > /etc/prime/boot_state
         else
 	    if [ -f /etc/prime/boot ]; then
@@ -295,6 +322,7 @@ case $type in
                 echo "$boot_type" > /etc/prime/current_type
             fi
         fi
+        logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
         apply_current
         fi
 	;;
@@ -309,6 +337,22 @@ case $type in
             echo "You can configure it with prime-select boot intel|intel2|nvidia|last"
         fi
 	;;
+	
+	log-view)
+	
+        cat $prime_logfile
+	;;
+	
+	log-clean)
+	
+        if [ -f $prime_logfile ]; then
+            check_root
+	        rm $prime_logfile
+	        echo "$prime_logfile removed!"
+	    else
+	        echo "$prime_logfile is already clean!"
+        fi
+    ;;
 	
     *)
         usage
