@@ -1,10 +1,10 @@
-OpenSUSE nvidia-prime like package
+openSUSE nvidia-prime like package
 ==================================
 
 Assumptions
 -----------
 
-* You are running OpenSUSE Tumbleweed
+* You are running openSUSE Tumbleweed
 * You don't have bumblebee installed
 * You installed nvidia drivers using http://opensuse-community.org/nvidia.ymp
 
