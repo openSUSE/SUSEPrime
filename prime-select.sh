@@ -175,7 +175,7 @@ function apply_current {
             
         if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
             echo "N" > /etc/prime/boot_state
-            logging "Reenabling prime-boot-selector, setting boot_status to N"
+            logging "Reenabling prime-boot-selector, setting [ boot_state > N ]"
             systemctl disable prime-select
             systemctl enable prime-boot-selector
             logging "Reaching graphical.target"
@@ -199,38 +199,19 @@ case $type in
 	    apply_current
     ;;
     
-    nvidia)
+    nvidia|intel|intel2)
     
         check_root
         current_check
-        echo "$type" > /etc/prime/current_type
-        logging "user_logout_waiter: started"
-        $0 user_logout_waiter &
-	    echo -e "Logout to switch graphics"
-	;;
-    
-    intel)
-    
-        check_root
-        current_check
-        echo "$type" > /etc/prime/current_type
-        logging "user_logout_waiter: started"
-        $0 user_logout_waiter &
-        echo -e "Logout to switch graphics"
-    ;;
-    
-    intel2)
-    
-        check_root
-        current_check
-        if ! rpm -q xf86-video-intel > /dev/null; then
-		    echo "package xf86-video-intel is not installed";
-		    exit 1
+        if [ "$type" = "intel2" ];then
+            if ! rpm -q xf86-video-intel > /dev/null; then
+                echo "package xf86-video-intel is not installed";
+                exit 1
+            fi
         fi
-        echo "$type" > /etc/prime/current_type
         logging "user_logout_waiter: started"
-        $0 user_logout_waiter &
-        echo -e "Logout to switch graphics"
+        $0 user_logout_waiter $type &
+	    echo -e "Logout to switch graphics"
 	;;
     
     boot)
@@ -298,7 +279,8 @@ case $type in
 	    while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
             sleep 1s
         done
-        logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and setting boot_state to S"
+        logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        echo $2 > /etc/prime/current_type
         echo "S" > /etc/prime/boot_state
         systemctl enable prime-select
         systemctl disable prime-boot-selector
@@ -313,7 +295,7 @@ case $type in
             echo "B" > /etc/prime/boot_state
         fi
         if [ "$(cat /etc/prime/boot_state)" = "N" ]; then
-            logging "prime-boot-selector: useless call caused by isolating graphical.target, setting boot_state to B"
+            logging "prime-boot-selector: useless call caused by isolating graphical.target [ boot_state > B ]"
             echo "B" > /etc/prime/boot_state
         else
 	    if [ -f /etc/prime/boot ]; then
