@@ -23,11 +23,13 @@ function usage {
     echo
     echo "usage: `basename $0` $driver_choices|unset|get-current|get-boot|log-view|log-clean"
     echo "usage: `basename $0` boot $driver_choices|last"
+    echo "usage: `basename $0` next-boot $driver_choices|abort"
     echo
     echo "intel: use the Intel card with the modesetting driver"
     echo "intel2: use the Intel card with the Intel open-source driver (xf86-video-intel). If you use this driver in a Plasma session, make sure to first disable vsync in the Plasma compositor settings to prevent video corruption"
     echo "nvidia: use the NVIDIA binary driver"
     echo "boot: select default card at boot or set last used"
+    echo "next-boot: select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
     echo "get-boot: display default card at boot"
     echo "log-view: view switching logfile to se errors or debug"
     echo "log-clean: clean logfile"
@@ -220,27 +222,17 @@ case $type in
 	
 	    case $2 in
 	    
-            nvidia|intel)
-	    
+            nvidia|intel|intel2|last)
+            
+                if [ "$2" = "intel2" ]; then  
+                    if ! rpm -q xf86-video-intel > /dev/null; then
+                        echo "package xf86-video-intel is not installed";
+                        exit 1
+                    fi
+                fi
 	            echo "$2" > /etc/prime/boot
                 $0 get-boot
 	        ;;
-	    
-	        intel2)
-	    
-                if ! rpm -q xf86-video-intel > /dev/null; then
-                    echo "package xf86-video-intel is not installed";
-                    exit 1
-                fi
-                echo "$2" > /etc/prime/boot
-                $0 get-boot
-            ;;
-        
-	        last)
-	    
-                echo "$2" > /etc/prime/boot
-                $0 get-boot
-            ;;
 	    
 	        *)
 	    
@@ -249,6 +241,39 @@ case $type in
 	        ;;
         esac
     ;;
+	
+    next-boot)
+    
+        check_root
+	
+        case $2 in
+	   
+            nvidia|intel|intel2)
+                
+                if [ "$2" = "intel2" ]; then  
+                    if ! rpm -q xf86-video-intel > /dev/null; then
+                        echo "package xf86-video-intel is not installed";
+                        exit 1
+                    fi
+                fi
+                echo "$2" > /etc/prime/forced_boot
+                $0 get-boot
+	        ;;
+	        
+	        abort)
+	        
+                rm /etc/prime/forced_boot
+                echo "Next boot forcing aborted"
+	        ;;
+
+            *)
+	    
+                echo "Invalid choice"
+                usage
+	        ;;
+        esac
+    ;;
+	
 	
     get-current)
 	
@@ -269,6 +294,7 @@ case $type in
 	    rm /etc/prime/current_type
 	    rm /etc/prime/boot_state
 	    rm /etc/prime/boot
+	    rm /etc/prime/forced_boot
 	    rm $prime_logfile
 	;;
 
@@ -298,12 +324,17 @@ case $type in
             logging "prime-boot-selector: useless call caused by isolating graphical.target [ boot_state > B ]"
             echo "B" > /etc/prime/boot_state
         else
-	    if [ -f /etc/prime/boot ]; then
-    	    boot_type=`cat /etc/prime/boot`
-	        if [ "$boot_type" != "last" ]; then
-                echo "$boot_type" > /etc/prime/current_type
+	        if [ -f /etc/prime/boot ]; then
+    	        boot_type=`cat /etc/prime/boot`
+	            if [ "$boot_type" != "last" ]; then
+                    echo "$boot_type" > /etc/prime/current_type
+                fi
             fi
-        fi
+            if [ -f /etc/prime/forced_boot ]; then
+                echo "$(cat /etc/prime/forced_boot)" > /etc/prime/current_type
+                rm /etc/prime/forced_boot
+                logging "prime-boot-selector: forcing booting with $(cat /etc/prime/current_type), boot preference ignored"
+            fi
         logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
         apply_current
         fi
@@ -312,11 +343,13 @@ case $type in
 	get-boot)
 	
         if [ -f /etc/prime/boot ]; then
-            echo -n "Default at system boot: "
-            cat /etc/prime/boot
+            echo "Default at system boot: $(cat /etc/prime/boot)"
         else
             echo "Default at system boot: auto (last)"
             echo "You can configure it with prime-select boot intel|intel2|nvidia|last"
+        fi
+        if [ -f /etc/prime/forced_boot ]; then
+            echo "Next boot forced to $(cat /etc/prime/forced_boot) by user"
         fi
 	;;
 	
