@@ -175,7 +175,7 @@ function apply_current {
             
         if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
             echo "N" > /etc/prime/boot_state
-            logging "setting boot_status to N, reenabling prime-boot-selector"
+            logging "Reenabling prime-boot-selector, setting boot_status to N"
             systemctl disable prime-select
             systemctl enable prime-boot-selector
             logging "Reaching graphical.target"
@@ -340,7 +340,7 @@ case $type in
 	
 	log-view)
 	
-        cat $prime_logfile
+        less +G -e $prime_logfile
 	;;
 	
 	log-clean)
