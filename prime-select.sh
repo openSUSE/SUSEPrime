@@ -24,13 +24,15 @@ function usage {
     echo "usage: `basename $0` $driver_choices|unset|get-current|get-boot|log-view|log-clean"
     echo "usage: `basename $0` boot $driver_choices|last"
     echo "usage: `basename $0` next-boot $driver_choices|abort"
+    echo "usage: `basename $0` service check|disable|restore"
     echo
     echo "intel: use the Intel card with the modesetting driver"
-    echo "intel2: use the Intel card with the Intel open-source driver (xf86-video-intel). If you use this driver in a Plasma session, make sure to first disable vsync in the Plasma compositor settings to prevent video corruption"
+    echo -e "intel2: use the Intel card with the Intel open-source driver (xf86-video-intel). If you use this driver in a Plasma session, make sure\n        to first disable vsync in the Plasma compositor settings to prevent video corruption"
     echo "nvidia: use the NVIDIA binary driver"
     echo "boot: select default card at boot or set last used"
     echo "next-boot: select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
     echo "get-boot: display default card at boot"
+    echo "service: disable, check or restore prime-select service. Could be useful disabling service before isolating multi-user.target to prevent service execution."
     echo "log-view: view switching logfile to se errors or debug"
     echo "log-clean: clean logfile"
     echo "unset: disable effects of this script and let Xorg decide what driver to use"
@@ -43,10 +45,6 @@ function usage {
 
 function logging {
     if ! [ -f $prime_logfile ]; then 
-        echo "##SUSEPrime logfile##" > $prime_logfile
-    elif [ $(wc -l < $prime_logfile) -gt 1000 ]; then
-        #cleaning logfile if has more than 1k events
-        rm $prime_logfile
         echo "##SUSEPrime logfile##" > $prime_logfile
     fi
     local logentry=${1}
@@ -177,7 +175,7 @@ function apply_current {
             
         if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
             echo "N" > /etc/prime/boot_state
-            logging "Reenabling prime-boot-selector, setting [ boot_state > N ]"
+            logging "Reenabling prime-boot-selector [ boot_state > N ]"
             systemctl disable prime-select
             systemctl enable prime-boot-selector
             logging "Reaching graphical.target"
@@ -205,11 +203,20 @@ case $type in
     
         check_root
         current_check
+        if [ $(wc -l < $prime_logfile) -gt 1000 ]; then
+            #cleaning logfile if has more than 1k events
+            rm $prime_logfile
+            echo "##SUSEPrime logfile##" > $prime_logfile
+        fi
         if [ "$type" = "intel2" ];then
             if ! rpm -q xf86-video-intel > /dev/null; then
                 echo "package xf86-video-intel is not installed";
                 exit 1
             fi
+        fi
+        if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-boot-selector.service ]; then
+            echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
+            exit
         fi
         logging "user_logout_waiter: started"
         $0 user_logout_waiter $type &
@@ -296,6 +303,43 @@ case $type in
 	    rm /etc/prime/boot
 	    rm /etc/prime/forced_boot
 	    rm $prime_logfile
+	;;
+	
+    service)
+    
+        case $2 in
+        
+            check)
+            
+                if [ -f /etc/systemd/system/multi-user.target.wants/prime-boot-selector.service ]; then
+                    if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
+                        echo "prime-select: service is set correctly"
+                        exit
+                    fi
+                fi
+                echo "prime-select: service has a wrong setting or is disabled by user, please do prime-select service restore"
+                echo "If you are running this command in multi-user.target please ignore this message"
+            ;;
+            
+            restore)
+            
+                check_root
+                systemctl enable prime-boot-selector
+                systemctl disable prime-select
+                echo "prime-select: service restored"
+                logging "service restored by user"
+            ;;
+            
+            disable)
+                
+                check_root
+                systemctl disable prime-boot-selector
+                systemctl disable prime-select
+                echo -e "prime-select: service disabled. Remember prime-select needs this service to work correctly.\nUse prime-select service restore to enable service again "
+                logging "service disabled by user"
+            ;;
+        esac
+    
 	;;
 
 	user_logout_waiter)
