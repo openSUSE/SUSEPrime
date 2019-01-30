@@ -1,11 +1,11 @@
 [Unit]
-Description=Prime Select Service
+Description=Prime Select Service (Boot Selector)
 After=multi-user.target
 Before=display-manager.service
 
 [Service]
 Type=oneshot
-ExecStart=prime-select apply-current
+ExecStart=prime-select prime_booting
 
 [Install]
 WantedBy=multi-user.target

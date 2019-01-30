@@ -53,15 +53,17 @@ dracut -f
 
 This will also blacklist the `nouveau` module which can really get in the way with Optimus and causing black screens.
 
-### Install the systemd service for loading NVIDIA module when needed
+### Install the systemd services for doing switch and set correct card during boot
 
 ```
-cp /etc/prime/prime-select.service /usr/lib/systemd/system
-systemctl enable prime-select
+cp /etc/prime/prime-select.service           /usr/lib/systemd/system
+cp /etc/prime/prime-boot-selector.service    /usr/lib/systemd/system
+systemctl enable prime-boot-selector
 ```
 
-This service calls prime-select with whatever driver was previously set by user.
-If nvidia is set, it will load the NVIDIA modules before starting the Display Manager (login screen).
+Service prime-select chooses with whatever driver was previously set by user.
+Service prime-boot-selector sets all things during boot [MUST BE ENABLED]
+If nvidia is set, it will load the NVIDIA modules before starting the Graphical Target.
 Moreover, if an intel config is set but the Intel card was disabled in BIOS (leaving only the dGPU), this service will automatically switch to the nvidia config.
 
 
@@ -77,31 +79,6 @@ Where `driver` is one of:
 - `intel2`: uses the intel driver (xf86-video-intel). If you use Plasma you might get corrupted flickering display. To fix this make sure to disable vsync in the Plasma compositor settings first. Vsync will be handled by the intel driver
 - `nvidia`: use the NVIDIA binary driver
 
-
-### How do I switch from nvidia to intel with NVIDIA power off support ?
-
-
-It requires switching runlevels for the script to be able to remove the NVIDIA modules and power off the card:
-
-Exit Xorg, going into runlevel 3 (multi-user):
-
-```
-<save all your work in Xorg, close programs as needed>
-sudo init 3
-<login as root on console>
-```
-
-Use the script to change driver:
-
-```
-prime-select intel
-```
-
-Restart in run level 5 (graphical mode) with the new driver:
-
-```
-init 5
-```
 
 ### How to I check that the NVIDIA card is powered off ?
 
