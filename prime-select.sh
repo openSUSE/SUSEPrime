@@ -386,11 +386,7 @@ case $type in
             logging "prime-boot-selector: forcing booting with $(cat /etc/prime/current_type), boot preference ignored"
             logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
             apply_current
-<<<<<<< HEAD
         else
-=======
-        elif [ -f /etc/prime/boot ]; then
->>>>>>> c7649c0... Little improvements
             boot_type=`cat /etc/prime/boot`
 	        if [ "$boot_type" != "last" ]; then
                 echo "$boot_type" > /etc/prime/current_type
