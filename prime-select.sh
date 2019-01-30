@@ -21,25 +21,29 @@ lspci_intel_line="VGA compatible controller: Intel"
 
 function usage {
     echo
-    echo "usage: `basename $0` $driver_choices|unset|get-current|get-boot|log-view|log-clean"
-    echo "usage: `basename $0` boot $driver_choices|last"
+    echo "usage: `basename $0`           $driver_choices|unset|get-current|get-boot|log-view|log-clean"
+    echo "usage: `basename $0` boot      $driver_choices|last"
     echo "usage: `basename $0` next-boot $driver_choices|abort"
-    echo "usage: `basename $0` service check|disable|restore"
+    echo "usage: `basename $0` service   check|disable|restore"
     echo
-    echo "intel: use the Intel card with the modesetting driver"
-    echo -e "intel2: use the Intel card with the Intel open-source driver (xf86-video-intel). If you use this driver in a Plasma session, make sure\n        to first disable vsync in the Plasma compositor settings to prevent video corruption"
-    echo "nvidia: use the NVIDIA binary driver"
-    echo "boot: select default card at boot or set last used"
-    echo "next-boot: select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
-    echo "get-boot: display default card at boot"
-    echo "service: disable, check or restore prime-select service. Could be useful disabling service before isolating multi-user.target to prevent service execution."
-    echo "log-view: view switching logfile to se errors or debug"
-    echo "log-clean: clean logfile"
-    echo "unset: disable effects of this script and let Xorg decide what driver to use"
+    echo "intel:       use the Intel card with the modesetting driver"
+    echo "intel2:      use the Intel card with the Intel open-source driver (xf86-video-intel). If you use this driver in a Plasma"
+    echo "             session, make sure to first disable vsync in the Plasma compositor settings to prevent video corruption"
+    echo "nvidia:      use the NVIDIA binary driver"
+    echo "boot:        select default card at boot or set last used"
+    echo "next-boot:   select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
+    echo "get-boot:    display default card at boot"
+    echo "service:     disable, check or restore prime-select service. Could be useful disabling service"
+    echo "             before isolating multi-user.target to prevent service execution."
+    echo "log-view:    view switching logfile to see errors or debug"
+    echo "log-clean:   clean logfile"
+    echo "unset:       disable effects of this script and let Xorg decide what driver to use"
     echo "get-current: display driver currently in use by this tool"
-    echo "apply-current: re-apply this script using previously set driver [DO NOT USE IT] (used by prime-select systemd service)"
-    echo "user_logout_waiter: waits user logout [DO NOT USE IT] (used by prime-select systemd service)"
-    echo "prime_booting: sets correct card during boot [DO NOT USE IT] (used by prime-boot-selector systemd service)"
+    echo
+    echo "##FOLLOWING COMMANDS ARE USED BY prime-select SERVICEs, DON'T USE THEM MANUALLY##"
+    echo "apply-current:      re-apply this script using previously set driver (used by prime-select systemd service)"
+    echo "user_logout_waiter: waits user logout (used by prime-select systemd service)"
+    echo "prime_booting:      sets correct card during boot (used by prime-boot-selector systemd service)"
     echo
 }
 
@@ -296,7 +300,7 @@ case $type in
     unset)
 
 	    check_root
-	
+	    $0 service disable
 	    clean_files
 	    rm /etc/prime/current_type
 	    rm /etc/prime/boot_state
@@ -338,6 +342,12 @@ case $type in
                 echo -e "prime-select: service disabled. Remember prime-select needs this service to work correctly.\nUse prime-select service restore to enable service again "
                 logging "service disabled by user"
             ;;
+            
+            *)
+	    
+                echo "Invalid choice"
+                usage
+	        ;;
         esac
     
 	;;
@@ -347,7 +357,7 @@ case $type in
 	    #manage md5 sum xorg logs to check when X restarted, then jump init 3
 	    logsum=$(md5sum $xorg_logfile | awk '{print $1}')
 	    while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
-            sleep 1s
+            sleep 0.5s
         done
         logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
         echo $2 > /etc/prime/current_type
@@ -364,23 +374,25 @@ case $type in
         if ! [ -f /etc/prime/boot_state ]; then
             echo "B" > /etc/prime/boot_state
         fi
+        if ! [ -f /etc/prime/boot ]; then
+            echo "last" > /etc/prime/boot
+        fi
         if [ "$(cat /etc/prime/boot_state)" = "N" ]; then
             logging "prime-boot-selector: useless call caused by isolating graphical.target [ boot_state > B ]"
             echo "B" > /etc/prime/boot_state
+        elif [ -f /etc/prime/forced_boot ]; then
+            echo "$(cat /etc/prime/forced_boot)" > /etc/prime/current_type
+            rm /etc/prime/forced_boot
+            logging "prime-boot-selector: forcing booting with $(cat /etc/prime/current_type), boot preference ignored"
+            logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
+            apply_current
         else
-	        if [ -f /etc/prime/boot ]; then
-    	        boot_type=`cat /etc/prime/boot`
-	            if [ "$boot_type" != "last" ]; then
-                    echo "$boot_type" > /etc/prime/current_type
-                fi
+            boot_type=`cat /etc/prime/boot`
+	        if [ "$boot_type" != "last" ]; then
+                echo "$boot_type" > /etc/prime/current_type
             fi
-            if [ -f /etc/prime/forced_boot ]; then
-                echo "$(cat /etc/prime/forced_boot)" > /etc/prime/current_type
-                rm /etc/prime/forced_boot
-                logging "prime-boot-selector: forcing booting with $(cat /etc/prime/current_type), boot preference ignored"
-            fi
-        logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
-        apply_current
+            logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
+            apply_current
         fi
 	;;
 	
