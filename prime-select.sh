@@ -62,6 +62,20 @@ function check_root {
     fi
 }
 
+function bbcheck {
+    if [ "$(rpm -q bbswitch | grep bbswitch-)" > /dev/null ]; then
+        if [ "$(grep OFF /proc/acpi/bbswitch)" > /dev/null ]; then
+            echo "[bbswitch] NVIDIA card is OFF"
+        elif [ "$(grep ON /proc/acpi/bbswitch)" > /dev/null ]; then
+            echo "[bbswitch] NVIDIA card is ON"
+        else
+            echo "bbswitch is installed but seems broken. Cannot change nvidia power status"
+        fi
+    else
+        echo "bbswitch is not installed. NVIDIA card will not be powered off"
+    fi
+}
+
 function clean_files {
     rm -f /etc/X11/xorg.conf.d/90-nvidia.conf
     rm -f /etc/X11/xorg.conf.d/90-intel.conf
@@ -75,7 +89,8 @@ function set_nvidia {
 ON
 EOF
     fi
-
+    
+    logging "trying switch ON nvidia: $(bbcheck)"
     # will load all other dependency modules
     modprobe nvidia_drm
     
@@ -149,12 +164,9 @@ function common_set_intel {
         tee /proc/acpi/bbswitch > /dev/null <<EOF 
 OFF
 EOF
-        grep OFF /proc/acpi/bbswitch > /dev/null || logging "Failed to power off NVIDIA card"
-
-	else
-        rpm -q bbswitch > /dev/null || logging "bbswitch is not installed. NVIDIA card will not be powered off"
-	fi
+    fi
 	
+	logging "trying switch OFF nvidia: $(bbcheck)"
 	logging "Intel card correctly set"
 	
 	$0 get-current
@@ -304,7 +316,8 @@ case $type in
             echo "No driver configured."
             usage
 	    fi
-	;;
+        bbcheck
+	;; 
 
     unset)
 
@@ -315,7 +328,7 @@ case $type in
 	    rm /etc/prime/boot_state &> /dev/null
 	    rm /etc/prime/boot &> /dev/null
 	    rm /etc/prime/forced_boot &> /dev/null
-	    rm $prime_logfile
+	    rm $prime_logfile &> /dev/null
 	;;
 	
     service)
