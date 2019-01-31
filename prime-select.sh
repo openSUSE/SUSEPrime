@@ -190,7 +190,9 @@ function apply_current {
 }
 
 function current_check {
-    if [ "$type" = "$(cat /etc/prime/current_type)" ]; then
+    if ! [ -f /etc/prime/current_type ]; then
+        echo "Preparing first configuration"
+    elif [ "$type" = "$(cat /etc/prime/current_type)" ]; then
         echo "$type driver already in use!"
         exit
     fi
@@ -207,9 +209,12 @@ case $type in
     
         check_root
         current_check
+        if ! [ -f /var/log/prime-select.log ]; then
+            echo "##SUSEPrime logfile##" > $prime_logfile
+        fi
         if [ $(wc -l < $prime_logfile) -gt 1000 ]; then
             #cleaning logfile if has more than 1k events
-            rm $prime_logfile
+            rm $prime_logfile &> /dev/null
             echo "##SUSEPrime logfile##" > $prime_logfile
         fi
         if [ "$type" = "intel2" ];then
@@ -273,8 +278,12 @@ case $type in
 	        
 	        abort)
 	        
-                rm /etc/prime/forced_boot
-                echo "Next boot forcing aborted"
+                if [ -f /etc/prime/forced_boot ]; then
+                    rm /etc/prime/forced_boot
+                    echo "Next boot forcing aborted"
+                else
+                    echo "Next boot is NOT forced"
+                fi
 	        ;;
 
             *)
@@ -302,10 +311,10 @@ case $type in
 	    check_root
 	    $0 service disable
 	    clean_files
-	    rm /etc/prime/current_type
-	    rm /etc/prime/boot_state
-	    rm /etc/prime/boot
-	    rm /etc/prime/forced_boot
+	    rm /etc/prime/current_type &> /dev/null
+	    rm /etc/prime/boot_state &> /dev/null
+	    rm /etc/prime/boot &> /dev/null
+	    rm /etc/prime/forced_boot &> /dev/null
 	    rm $prime_logfile
 	;;
 	
@@ -411,7 +420,11 @@ case $type in
 	
 	log-view)
 	
-        less +G -e $prime_logfile
+        if [ -f $prime_logfile ]; then
+            less +G -e $prime_logfile
+        else
+            echo "No logfile in /var/log/prime-select.log"
+        fi
 	;;
 	
 	log-clean)
