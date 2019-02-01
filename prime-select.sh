@@ -51,8 +51,7 @@ function logging {
     if ! [ -f $prime_logfile ]; then 
         echo "##SUSEPrime logfile##" > $prime_logfile
     fi
-    local logentry=${1}
-    echo "[ $(date +"%H:%M:%S") ] $logentry" >> $prime_logfile
+    echo "[ $(date +"%H:%M:%S") ] ${1}" >> $prime_logfile
 }
 
 function check_root {
@@ -82,8 +81,6 @@ function clean_files {
 }
 
 function set_nvidia {
-    check_root
-	
     if [ -f /proc/acpi/bbswitch ]; then        
         tee /proc/acpi/bbswitch > /dev/null <<EOF
 ON
@@ -115,12 +112,9 @@ EOF
 
     echo "nvidia" > /etc/prime/current_type
     logging "Nvidia card correctly set"
-    
-    $0 get-current
 }
 
 function set_intel {
-    check_root
     # modesetting driver is part of xorg-x11-server and always available
     conf=$xorg_intel_conf_intel
     echo "intel" > /etc/prime/current_type
@@ -129,7 +123,6 @@ function set_intel {
 }
     
 function set_intel2 {
-    check_root
     conf=$xorg_intel_conf_intel2
     echo "intel2" > /etc/prime/current_type
     #jump to common function intel1/intel2
@@ -168,8 +161,6 @@ EOF
 	
 	logging "trying switch OFF nvidia: $(bbcheck)"
 	logging "Intel card correctly set"
-	
-	$0 get-current
 }
 
 function apply_current {
@@ -184,7 +175,6 @@ function apply_current {
                 
             logging "Forcing nvidia due to Intel card not found"
             current_type="nvidia"
-            logging "Nvidia card correctly set"
         fi
             
         set_$current_type
@@ -198,10 +188,14 @@ function apply_current {
             systemctl isolate graphical.target
         fi
     fi
- 
 }
 
 function current_check {
+    if [ "$(pgrep -fl "prime-select user_logout_waiter")" > /dev/null ]; then
+        echo "Error: a switch operation already in execution"
+        echo "You can undo it using sudo killall prime-select"
+        exit 1
+    fi
     if ! [ -f /etc/prime/current_type ]; then
         echo "Preparing first configuration"
     elif [ "$type" = "$(cat /etc/prime/current_type)" ]; then
@@ -214,6 +208,7 @@ case $type in
     
     apply-current)
     
+        check_root
 	    apply_current
     ;;
     
@@ -239,6 +234,9 @@ case $type in
             echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
             exit
         fi
+        if ! { [ "$(bbcheck)" = "[bbswitch] NVIDIA card is ON" ] || [ "$(bbcheck)" = "[bbswitch] NVIDIA card is OFF" ]; }; then
+            bbcheck
+        fi            
         logging "user_logout_waiter: started"
         $0 user_logout_waiter $type &
 	    echo -e "Logout to switch graphics"
