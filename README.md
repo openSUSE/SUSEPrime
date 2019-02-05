@@ -24,6 +24,10 @@ Contact
 * Bo Simonsen <bo@geekworld.dk>
 * Michal Srb <msrb@suse.com>
 
+Related projects
+----------------
+
+* SUSEPrimeQT <https://github.com/simopil/SUSEPrimeQt/> Provides a simple GUI for SUSEPrime
 
 NVIDIA power off support
 -------------------------
