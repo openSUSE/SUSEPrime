@@ -51,8 +51,7 @@ function logging {
     if ! [ -f $prime_logfile ]; then 
         echo "##SUSEPrime logfile##" > $prime_logfile
     fi
-    local logentry=${1}
-    echo "[ $(date +"%H:%M:%S") ] $logentry" >> $prime_logfile
+    echo "[ $(date +"%H:%M:%S") ] ${1}" >> $prime_logfile
 }
 
 function check_root {
@@ -62,20 +61,33 @@ function check_root {
     fi
 }
 
+function bbcheck {
+    if [ "$(rpm -q bbswitch | grep bbswitch-)" > /dev/null ]; then
+        if [ "$(grep OFF /proc/acpi/bbswitch)" > /dev/null ]; then
+            echo "[bbswitch] NVIDIA card is OFF"
+        elif [ "$(grep ON /proc/acpi/bbswitch)" > /dev/null ]; then
+            echo "[bbswitch] NVIDIA card is ON"
+        else
+            echo "bbswitch is installed but seems broken. Cannot change nvidia power status"
+        fi
+    else
+        echo "bbswitch is not installed. NVIDIA card will not be powered off"
+    fi
+}
+
 function clean_files {
     rm -f /etc/X11/xorg.conf.d/90-nvidia.conf
     rm -f /etc/X11/xorg.conf.d/90-intel.conf
 }
 
 function set_nvidia {
-    check_root
-	
     if [ -f /proc/acpi/bbswitch ]; then        
         tee /proc/acpi/bbswitch > /dev/null <<EOF
 ON
 EOF
     fi
-
+    
+    logging "trying switch ON nvidia: $(bbcheck)"
     # will load all other dependency modules
     modprobe nvidia_drm
     
@@ -100,12 +112,9 @@ EOF
 
     echo "nvidia" > /etc/prime/current_type
     logging "Nvidia card correctly set"
-    
-    $0 get-current
 }
 
 function set_intel {
-    check_root
     # modesetting driver is part of xorg-x11-server and always available
     conf=$xorg_intel_conf_intel
     echo "intel" > /etc/prime/current_type
@@ -114,7 +123,6 @@ function set_intel {
 }
     
 function set_intel2 {
-    check_root
     conf=$xorg_intel_conf_intel2
     echo "intel2" > /etc/prime/current_type
     #jump to common function intel1/intel2
@@ -149,15 +157,10 @@ function common_set_intel {
         tee /proc/acpi/bbswitch > /dev/null <<EOF 
 OFF
 EOF
-        grep OFF /proc/acpi/bbswitch > /dev/null || logging "Failed to power off NVIDIA card"
-
-	else
-        rpm -q bbswitch > /dev/null || logging "bbswitch is not installed. NVIDIA card will not be powered off"
-	fi
+    fi
 	
+	logging "trying switch OFF nvidia: $(bbcheck)"
 	logging "Intel card correctly set"
-	
-	$0 get-current
 }
 
 function apply_current {
@@ -172,7 +175,6 @@ function apply_current {
                 
             logging "Forcing nvidia due to Intel card not found"
             current_type="nvidia"
-            logging "Nvidia card correctly set"
         fi
             
         set_$current_type
@@ -186,10 +188,14 @@ function apply_current {
             systemctl isolate graphical.target
         fi
     fi
- 
 }
 
 function current_check {
+    if [ "$(pgrep -fl "prime-select user_logout_waiter")" > /dev/null ]; then
+        echo "Error: a switch operation already in execution"
+        echo "You can undo it using sudo killall prime-select"
+        exit 1
+    fi
     if ! [ -f /etc/prime/current_type ]; then
         echo "Preparing first configuration"
     elif [ "$type" = "$(cat /etc/prime/current_type)" ]; then
@@ -202,6 +208,7 @@ case $type in
     
     apply-current)
     
+        check_root
 	    apply_current
     ;;
     
@@ -227,6 +234,9 @@ case $type in
             echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
             exit
         fi
+        if ! { [ "$(bbcheck)" = "[bbswitch] NVIDIA card is ON" ] || [ "$(bbcheck)" = "[bbswitch] NVIDIA card is OFF" ]; }; then
+            bbcheck
+        fi            
         logging "user_logout_waiter: started"
         $0 user_logout_waiter $type &
 	    echo -e "Logout to switch graphics"
@@ -304,7 +314,8 @@ case $type in
             echo "No driver configured."
             usage
 	    fi
-	;;
+        bbcheck
+	;; 
 
     unset)
 
@@ -315,7 +326,7 @@ case $type in
 	    rm /etc/prime/boot_state &> /dev/null
 	    rm /etc/prime/boot &> /dev/null
 	    rm /etc/prime/forced_boot &> /dev/null
-	    rm $prime_logfile
+	    rm $prime_logfile &> /dev/null
 	;;
 	
     service)
