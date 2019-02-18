@@ -200,7 +200,7 @@ function current_check {
         echo "Preparing first configuration"
     elif [ "$type" = "$(cat /etc/prime/current_type)" ]; then
         echo "$type driver already in use!"
-        exit
+        exit 1
     fi
 }
 
@@ -232,7 +232,7 @@ case $type in
         fi
         if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-boot-selector.service ]; then
             echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
-            exit
+            exit 1
         fi
         if ! { [ "$(bbcheck)" = "[bbswitch] NVIDIA card is ON" ] || [ "$(bbcheck)" = "[bbswitch] NVIDIA card is OFF" ]; }; then
             bbcheck
@@ -293,6 +293,7 @@ case $type in
                     echo "Next boot forcing aborted"
                 else
                     echo "Next boot is NOT forced"
+                    exit 1
                 fi
 	        ;;
 
@@ -374,12 +375,15 @@ case $type in
 
 	user_logout_waiter)
 	
-	    #manage md5 sum xorg logs to check when X restarted, then jump init 3
-	    logsum=$(md5sum $xorg_logfile | awk '{print $1}')
-	    while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
-            sleep 0.5s
-        done
-        logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        runlev=$(runlevel | awk '{print $2}')
+        if [ $runlev = 5 ]; then
+            #manage md5 sum xorg logs to check when X restarted, then jump init 3
+            logsum=$(md5sum $xorg_logfile | awk '{print $1}')
+            while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
+                sleep 0.5s
+            done
+            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        fi
         echo $2 > /etc/prime/current_type
         echo "S" > /etc/prime/boot_state
         systemctl enable prime-select
