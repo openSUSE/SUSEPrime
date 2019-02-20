@@ -13,7 +13,7 @@ type=$1
 xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
-xorg_logfile="/var/log/Xorg.0.log.old"
+xorg_logfile_sddm="/var/log/Xorg.0.log.old"
 prime_logfile="/var/log/prime-select.log"
 nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2"
@@ -378,12 +378,38 @@ case $type in
         runlev=$(runlevel | awk '{print $2}')
         if [ $runlev = 5 ]; then
             #manage md5 sum xorg logs to check when X restarted, then jump init 3
-            logsum=$(md5sum $xorg_logfile | awk '{print $1}')
-            while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
-                sleep 0.5s
-            done
-            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            
+            #GDM_mode
+            if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
+                xorg_logfile="/home/$(who am i | awk '{print $1}')/.local/share/xorg/Xorg.0.log.old"
+                xorg_logfile2="/home/$(who am i | awk '{print $1}')/.local/share/xorg/Xorg.1.log.old"
+                logsum=$(md5sum $xorg_logfile | awk '{print $1}')
+                logsum2=$(md5sum $xorg_logfile2 | awk '{print $1}')
+                while true; do
+                    if ! [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; then break; fi
+                    if ! [ $logsum2 == $(md5sum $xorg_logfile2 | awk '{print $1}') ]; then break; fi
+                    sleep 0.5s
+                done
+                
+            #SDDM_mode
+            elif [ "$(systemctl status display-manager | grep sddm)" > /dev/null ]; then
+                logsum=$(md5sum $xorg_logfile_sddm | awk '{print $1}')
+                while [ $logsum == $(md5sum $xorg_logfile_sddm | awk '{print $1}') ]; do
+                    sleep 0.5s
+                done
+                
+            else
+                echo "Unsupported display-manager, please report this to project page to add support."
+                echo "Script works ever in init 3"
+                read -p "Force-close current session? ALL UNSAVED CONTENTS WILL BE LOSE [Y/N] " choice
+                case "$choice" in 
+                    y|Y ) echo "Jumping to init 3...";;
+                    * ) exit 1;;
+                esac
+            fi            
+        logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
         fi
+        
         echo $2 > /etc/prime/current_type
         echo "S" > /etc/prime/boot_state
         systemctl enable prime-select
