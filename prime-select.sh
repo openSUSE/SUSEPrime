@@ -13,7 +13,6 @@ type=$1
 xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
-xorg_logfile="/var/log/Xorg.0.log.old"
 prime_logfile="/var/log/prime-select.log"
 nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2"
@@ -200,7 +199,7 @@ function current_check {
         echo "Preparing first configuration"
     elif [ "$type" = "$(cat /etc/prime/current_type)" ]; then
         echo "$type driver already in use!"
-        exit
+        exit 1
     fi
 }
 
@@ -232,11 +231,11 @@ case $type in
         fi
         if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-boot-selector.service ]; then
             echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
-            exit
+            exit 1
         fi
         if ! { [ "$(bbcheck)" = "[bbswitch] NVIDIA card is ON" ] || [ "$(bbcheck)" = "[bbswitch] NVIDIA card is OFF" ]; }; then
             bbcheck
-        fi            
+        fi
         logging "user_logout_waiter: started"
         $0 user_logout_waiter $type &
 	    echo -e "Logout to switch graphics"
@@ -293,6 +292,7 @@ case $type in
                     echo "Next boot forcing aborted"
                 else
                     echo "Next boot is NOT forced"
+                    exit 1
                 fi
 	        ;;
 
@@ -374,11 +374,35 @@ case $type in
 
 	user_logout_waiter)
 	
-	    #manage md5 sum xorg logs to check when X restarted, then jump init 3
-	    logsum=$(md5sum $xorg_logfile | awk '{print $1}')
-	    while [ $logsum == $(md5sum $xorg_logfile | awk '{print $1}') ]; do
-            sleep 0.5s
-        done
+        runlev=$(runlevel | awk '{print $2}')
+        if [ $runlev = 5 ]; then
+            #manage journalctl to check when X restarted, then jump init 3
+            currtime=$(date +"%T");
+            
+            #GDM_mode
+            if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
+                until [ "$(sudo journalctl --since "$currtime" | grep "pam_unix(gdm-password:session): session closed")" > /dev/null ]; do
+                    sleep 0.5s
+                done
+                
+            #SDDM_mode
+            elif [ "$(systemctl status display-manager | grep sddm)" > /dev/null ]; then
+                
+                until [ "$(sudo journalctl --since "$currtime" -e _COMM=sddm | grep "Removing display")" > /dev/null ]; do
+                    sleep 0.5s
+                done
+                
+            else
+                echo
+                echo "Unsupported display-manager, please report this to project page to add support."
+                echo "Script works ever in init 3"
+            fi    
+        #manually_started_X_case
+        elif [ $runlev = 3 ] && [ "$(pgrep -fl "xinit")" > /dev/null ]; then
+            while [ "$(pgrep -fl "xinit")" > /dev/null ]; do
+                sleep 0.5s
+            done
+        fi
         logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
         echo $2 > /etc/prime/current_type
         echo "S" > /etc/prime/boot_state
