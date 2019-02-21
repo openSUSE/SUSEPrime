@@ -213,8 +213,8 @@ case $type in
     
     nvidia|intel|intel2)
     
-        check_root
         current_check
+        check_root
         if ! [ -f /var/log/prime-select.log ]; then
             echo "##SUSEPrime logfile##" > $prime_logfile
         fi
@@ -236,8 +236,48 @@ case $type in
         if ! { [ "$(bbcheck)" = "[bbswitch] NVIDIA card is ON" ] || [ "$(bbcheck)" = "[bbswitch] NVIDIA card is OFF" ]; }; then
             bbcheck
         fi
-        logging "user_logout_waiter: started"
-        $0 user_logout_waiter $type &
+        #DM_check
+        runlev=$(runlevel | awk '{print $2}')
+        if [ $runlev = 5 ]; then
+            #GDM_mode
+            if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type gdm &
+                logging "user_logout_waiter: started"
+            #SDDM_mode
+            elif [ "$(systemctl status display-manager | grep sddm)" > /dev/null ]; then
+                $0 user_logout_waiter $type sddm &
+                logging "user_logout_waiter: started"
+            #lightdm_mode
+            elif [ "$(systemctl status display-manager | grep lightdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type lightdm &
+                logging "user_logout_waiter: started"
+            #unsupported_dm_force_close_option
+            else
+                echo "Unsupported display-manager, please report this to project page to add support."
+                echo "Script works ever in init 3"
+                echo "You can force-close session and switch graphics [could be dangerous],"
+                read -p "ALL UNSAVED DATA IN SESSION WILL BE LOST, CONTINUE? [Y/N]: " choice 
+                case "$choice" in
+                    y|Y ) 
+                        killall xinit 
+                        $0 user_logout_waiter $type now
+                        ;;
+                    * ) echo "Aborted. Exit."; exit ;;
+                esac
+            fi    
+        #manually_started_X_case
+        elif [ $runlev = 3 ] && [ "$(pgrep -fl "xinit")" > /dev/null ]; then
+            $0 user_logout_waiter $type x_only &
+            logging "user_logout_waiter: started"
+        else
+            echo "Seems you are on runlevel 3."
+            read -p "Do you want to switch graphics now and reach graphical.target? [y/n]: " choice
+            case "$choice" in
+                y|Y ) $0 user_logout_waiter $type now ;;
+                * ) echo "Aborted. Exit."; exit ;;
+            esac
+        fi
+        
 	    echo -e "Logout to switch graphics"
 	;;
     
@@ -373,37 +413,47 @@ case $type in
 	;;
 
 	user_logout_waiter)
-	
-        runlev=$(runlevel | awk '{print $2}')
-        if [ $runlev = 5 ]; then
-            #manage journalctl to check when X restarted, then jump init 3
-            currtime=$(date +"%T");
+        
+        currtime=$(date +"%T");
+        #manage journalctl to check when X restarted, then jump init 3
+        case "$3" in
             
+        gdm )
             #GDM_mode
-            if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
-                until [ "$(sudo journalctl --since "$currtime" | grep "pam_unix(gdm-password:session): session closed")" > /dev/null ]; do
-                    sleep 0.5s
-                done
-                
+            until [ "$(sudo journalctl --since "$currtime" | grep "pam_unix(gdm-password:session): session closed")" > /dev/null ]; do
+                sleep 0.5s
+            done
+            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        ;;    
+        
             #SDDM_mode
-            elif [ "$(systemctl status display-manager | grep sddm)" > /dev/null ]; then
-                
-                until [ "$(sudo journalctl --since "$currtime" -e _COMM=sddm | grep "Removing display")" > /dev/null ]; do
-                    sleep 0.5s
-                done
-                
-            else
-                echo
-                echo "Unsupported display-manager, please report this to project page to add support."
-                echo "Script works ever in init 3"
-            fi    
-        #manually_started_X_case
-        elif [ $runlev = 3 ] && [ "$(pgrep -fl "xinit")" > /dev/null ]; then
+        sddm )
+            until [ "$(sudo journalctl --since "$currtime" -e _COMM=sddm | grep "Removing display")" > /dev/null ]; do
+                sleep 0.5s
+            done
+            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        ;;
+        
+            #lightdm_mode
+        lightdm  )
+            until [ "$(sudo journalctl --since "$currtime" -e | grep "pam_unix(lightdm:session): session closed")" > /dev/null ]; do
+                sleep 0.5s
+            done
+            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        ;;
+        
+            #manually_started_X_case
+        x_only )
             while [ "$(pgrep -fl "xinit")" > /dev/null ]; do
                 sleep 0.5s
             done
-        fi
-        logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            logging "user_logout_waiter: X stop detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        ;;
+        now )
+            logging "user_logout_waiter: runlevel 3 mode, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        ;;
+        esac
+        
         echo $2 > /etc/prime/current_type
         echo "S" > /etc/prime/boot_state
         systemctl enable prime-select
