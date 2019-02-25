@@ -251,6 +251,14 @@ case $type in
             elif [ "$(systemctl status display-manager | grep lightdm)" > /dev/null ]; then
                 $0 user_logout_waiter $type lightdm &
                 logging "user_logout_waiter: started"
+            #XDM_mode
+            elif [ "$(systemctl status display-manager | grep xdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type xdm &
+                logging "user_logout_waiter: started"
+            #KDM_mode(uses xdm->calls xdm_mode)
+            elif [ "$(systemctl status display-manager | grep kdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type xdm &
+                logging "user_logout_waiter: started"
             #unsupported_dm_force_close_option
             else
                 echo "Unsupported display-manager, please report this to project page to add support."
@@ -420,7 +428,7 @@ case $type in
             
         gdm )
             #GDM_mode
-            until [ "$(sudo journalctl --since "$currtime" | grep "pam_unix(gdm-password:session): session closed")" > /dev/null ]; do
+            until [ "$(journalctl --since "$currtime" | grep "pam_unix(gdm-password:session): session closed")" > /dev/null ]; do
                 sleep 0.5s
             done
             logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
@@ -428,7 +436,7 @@ case $type in
         
             #SDDM_mode
         sddm )
-            until [ "$(sudo journalctl --since "$currtime" -e _COMM=sddm | grep "Removing display")" > /dev/null ]; do
+            until [ "$(journalctl --since "$currtime" -e _COMM=sddm | grep "Removing display")" > /dev/null ]; do
                 sleep 0.5s
             done
             logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
@@ -436,10 +444,20 @@ case $type in
         
             #lightdm_mode
         lightdm  )
-            until [ "$(sudo journalctl --since "$currtime" -e | grep "pam_unix(lightdm:session): session closed")" > /dev/null ]; do
+            until [ "$(journalctl --since "$currtime" -e | grep "pam_unix(lightdm:session): session closed")" > /dev/null ]; do
                 sleep 0.5s
             done
             logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+        ;;
+        
+            #xdm/kdm_mode
+        xdm )
+            until [ "$(journalctl --since "$currtime" -e | grep "pam_unix(xdm:session): session closed for user")" > /dev/null ]; do
+                sleep 0.5s
+            done
+            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            #stopping display-manager before runlev.3 seems work faster
+            systemctl stop display-manager
         ;;
         
             #manually_started_X_case
