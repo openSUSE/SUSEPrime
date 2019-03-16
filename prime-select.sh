@@ -25,10 +25,9 @@ function usage {
     echo "usage: `basename $0` next-boot $driver_choices|abort"
     echo "usage: `basename $0` service   check|disable|restore"
     echo
-    echo "intel:       use the Intel card with the modesetting driver"
-    echo "intel2:      use the Intel card with the Intel open-source driver (xf86-video-intel). If you use this driver in a Plasma"
-    echo "             session, make sure to first disable vsync in the Plasma compositor settings to prevent video corruption"
-    echo "nvidia:      use the NVIDIA binary driver"
+    echo "intel:       use the Intel card with the \"modesetting\" driver"
+    echo "intel2:      use the Intel card with the \"intel\" Open Source driver (xf86-video-intel)"
+    echo "nvidia:      use the NVIDIA proprietary driver"
     echo "boot:        select default card at boot or set last used"
     echo "next-boot:   select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
     echo "get-boot:    display default card at boot"
