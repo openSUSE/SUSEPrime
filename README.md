@@ -73,22 +73,31 @@ Moreover, if an intel config is set but the Intel card was disabled in BIOS (lea
 
 ## FAQ
 
-### What are the script parameters to select a driver ?
+### How do I select a driver ?
 
 prime-select `<driver>`
 
-Where `driver` is one of:
+Where `<driver>` is one of:
 
-- `intel`: uses the modesetting driver
-- `intel2`: uses the intel driver (xf86-video-intel). If you use Plasma you might get corrupted flickering display. To fix this make sure to disable vsync in the Plasma compositor settings first. Vsync will be handled by the intel driver
+- `intel`: use the `modesetting` driver
+- `intel2`: use the `intel` driver (xf86-video-intel)
 - `nvidia`: use the NVIDIA binary driver
 
 
-### How to I check that the NVIDIA card is powered off ?
+### How do I check the current driver configured and the power state of the NVIDIA card ?
 
 ```
-cat /proc/acpi/bbswitch 
-0000:01:00.0 OFF
+/usr/sbin/prime-select get-current
+Driver configured: intel
+[bbswitch] NVIDIA card is OFF
 ```
 
+To get more details on the Xorg driver, install package `inxi` if necessary and use `inxi -G`:
 
+```
+inxi -G
+Graphics:  Device-1: Intel UHD Graphics 630 driver: i915 v: kernel 
+           Device-2: NVIDIA GP107GLM [Quadro P600 Mobile] driver: N/A 
+           Display: x11 server: X.Org 1.20.4 driver: intel resolution: 3840x2160~60Hz 
+           OpenGL: renderer: Mesa DRI Intel UHD Graphics 630 (Coffeelake 3x8 GT2) v: 4.5 Mesa 18.3.4
+```
