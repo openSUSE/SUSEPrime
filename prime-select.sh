@@ -50,6 +50,7 @@ function logging {
         echo "##SUSEPrime logfile##" > $prime_logfile
     fi
     echo "[ $(date +"%H:%M:%S") ] ${1}" >> $prime_logfile
+    echo "${1}" | systemd-cat -t suse-prime -p info
 }
 
 function check_root {
