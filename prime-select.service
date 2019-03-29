@@ -1,11 +1,11 @@
 [Unit]
-Description=Prime Select Service
-After=multi-user.target
-Before=display-manager.service
+Description=SUSEPrime systemd service
+After=multi-user.target 
+Before=display-manager.service 
 
 [Service]
 Type=oneshot
-ExecStart=prime-select apply-current
+ExecStart=prime-select systemd_call
 
 [Install]
 WantedBy=multi-user.target
