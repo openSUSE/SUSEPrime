@@ -39,9 +39,8 @@ function usage {
     echo "get-current: display driver currently in use by this tool"
     echo
     echo "##FOLLOWING COMMANDS ARE USED BY prime-select SERVICEs, DON'T USE THEM MANUALLY##"
-    echo "apply-current:      re-apply this script using previously set driver (used by prime-select systemd service)"
+    echo "systemd_call:       called during boot or after user logout for switch"
     echo "user_logout_waiter: waits user logout (used by prime-select systemd service)"
-    echo "prime_booting:      sets correct card during boot (used by prime-boot-selector systemd service)"
     echo
 }
 
@@ -177,15 +176,6 @@ function apply_current {
         fi
             
         set_$current_type
-            
-        if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
-            echo "N" > /etc/prime/boot_state
-            logging "Reenabling prime-boot-selector [ boot_state > N ]"
-            systemctl disable prime-select
-            systemctl enable prime-boot-selector
-            logging "Reaching graphical.target"
-            systemctl isolate graphical.target
-        fi
     fi
 }
 
@@ -201,6 +191,38 @@ function current_check {
         echo "$type driver already in use!"
         exit 1
     fi
+}
+
+function booting {
+    if ! [ -f /etc/prime/boot_state ]; then
+            echo "N" > /etc/prime/boot_state
+        fi
+        if ! [ -f /etc/prime/boot ]; then
+            echo "last" > /etc/prime/boot
+        fi
+        
+        if [ -f /etc/prime/forced_boot ]; then
+            echo "$(cat /etc/prime/forced_boot)" > /etc/prime/current_type
+            rm /etc/prime/forced_boot
+            logging "Boot: forcing booting with $(cat /etc/prime/current_type), boot preference ignored"
+            logging "Boot: setting-up $(cat /etc/prime/current_type) card"
+            apply_current
+        else
+            boot_type=`cat /etc/prime/boot`
+	        if [ "$boot_type" != "last" ]; then
+                echo "$boot_type" > /etc/prime/current_type
+            fi
+            logging "Boot: setting-up $(cat /etc/prime/current_type) card"
+            apply_current
+        fi
+}
+
+function logout_switch {
+    apply_current
+    echo "N" > /etc/prime/boot_state
+    logging "HotSwitch: Reaching graphical.target [ boot_state > N ]"
+    systemctl isolate graphical.target &
+    systemctl stop prime-select
 }
 
 case $type in
@@ -229,9 +251,9 @@ case $type in
                 exit 1
             fi
         fi
-        if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-boot-selector.service ]; then
-            echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
-            exit 1
+        if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
+           echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
+           exit 1
         fi
         if ! { [ "$(bbcheck)" = "[bbswitch] NVIDIA card is ON" ] || [ "$(bbcheck)" = "[bbswitch] NVIDIA card is OFF" ]; }; then
             bbcheck
@@ -383,11 +405,9 @@ case $type in
         
             check)
             
-                if [ -f /etc/systemd/system/multi-user.target.wants/prime-boot-selector.service ]; then
-                    if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
-                        echo "prime-select: service is set correctly"
-                        exit
-                    fi
+                if [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
+                    echo "prime-select: service is set correctly"
+                    exit
                 fi
                 echo "prime-select: service has a wrong setting or is disabled by user, please do prime-select service restore"
                 echo "If you are running this command in multi-user.target please ignore this message"
@@ -396,8 +416,7 @@ case $type in
             restore)
             
                 check_root
-                systemctl enable prime-boot-selector
-                systemctl disable prime-select
+                systemctl enable prime-select
                 echo "prime-select: service restored"
                 logging "service restored by user"
             ;;
@@ -405,7 +424,6 @@ case $type in
             disable)
                 
                 check_root
-                systemctl disable prime-boot-selector
                 systemctl disable prime-select
                 echo -e "prime-select: service disabled. Remember prime-select needs this service to work correctly.\nUse prime-select service restore to enable service again "
                 logging "service disabled by user"
@@ -431,7 +449,7 @@ case $type in
             until [ "$(journalctl --since "$currtime" | grep "pam_unix(gdm-password:session): session closed")" > /dev/null ]; do
                 sleep 0.5s
             done
-            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            logging "user_logout_waiter: X restart detected, preparing switch to $2 [ boot_state > S ]"
         ;;    
         
             #SDDM_mode
@@ -439,7 +457,7 @@ case $type in
             until [ "$(journalctl --since "$currtime" -e _COMM=sddm | grep "Removing display")" > /dev/null ]; do
                 sleep 0.5s
             done
-            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            logging "user_logout_waiter: X restart detected, preparing switch to $2 [ boot_state > S ]"
         ;;
         
             #lightdm_mode
@@ -447,7 +465,7 @@ case $type in
             until [ "$(journalctl --since "$currtime" -e | grep "pam_unix(lightdm:session): session closed")" > /dev/null ]; do
                 sleep 0.5s
             done
-            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            logging "user_logout_waiter: X restart detected, preparing switch to $2 [ boot_state > S ]"
         ;;
         
             #xdm/kdm_mode
@@ -455,7 +473,7 @@ case $type in
             until [ "$(journalctl --since "$currtime" -e | grep "pam_unix(xdm:session): session closed for user")" > /dev/null ]; do
                 sleep 0.5s
             done
-            logging "user_logout_waiter: X restart detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            logging "user_logout_waiter: X restart detected, preparing switch to $2 [ boot_state > S ]"
             #stopping display-manager before runlev.3 seems work faster
             systemctl stop display-manager
         ;;
@@ -465,46 +483,27 @@ case $type in
             while [ "$(pgrep -fl "xinit")" > /dev/null ]; do
                 sleep 0.5s
             done
-            logging "user_logout_waiter: X stop detected, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            logging "user_logout_waiter: X stop detected, preparing switch to $2 [ boot_state > S ]"
         ;;
         now )
-            logging "user_logout_waiter: runlevel 3 mode, disabling prime-boot-selector and preparing switch to $2 [ boot_state > S ]"
+            logging "user_logout_waiter: runlevel 3 mode, preparing switch to $2 [ boot_state > S ]"
         ;;
         esac
         
         echo $2 > /etc/prime/current_type
         echo "S" > /etc/prime/boot_state
-        systemctl enable prime-select
-        systemctl disable prime-boot-selector
-        logging "Reaching multi-user.target"
+        logging "HotSwitch: Reaching multi-user.target"
         systemctl isolate multi-user.target
 	;;
 	
-	prime_booting)
-	
-        #called by prime-boot-selector service
-        if ! [ -f /etc/prime/boot_state ]; then
-            echo "B" > /etc/prime/boot_state
-        fi
-        if ! [ -f /etc/prime/boot ]; then
-            echo "last" > /etc/prime/boot
-        fi
-        if [ "$(cat /etc/prime/boot_state)" = "N" ]; then
-            logging "prime-boot-selector: useless call caused by isolating graphical.target [ boot_state > B ]"
-            echo "B" > /etc/prime/boot_state
-        elif [ -f /etc/prime/forced_boot ]; then
-            echo "$(cat /etc/prime/forced_boot)" > /etc/prime/current_type
-            rm /etc/prime/forced_boot
-            logging "prime-boot-selector: forcing booting with $(cat /etc/prime/current_type), boot preference ignored"
-            logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
-            apply_current
-        else
-            boot_type=`cat /etc/prime/boot`
-	        if [ "$boot_type" != "last" ]; then
-                echo "$boot_type" > /etc/prime/current_type
+	systemd_call)
+        #checks if system is booting or switching only
+        if [ "$(journalctl -b 0 | grep suse-prime)" > /dev/null ]; then
+            if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
+                logout_switch
             fi
-            logging "prime-boot-selector: setting-up $(cat /etc/prime/current_type) card"
-            apply_current
+        else
+            booting
         fi
 	;;
 	
