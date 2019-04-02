@@ -61,12 +61,9 @@ This will also blacklist the `nouveau` module which can really get in the way wi
 
 ```
 cp /etc/prime/prime-select.service           /usr/lib/systemd/system
-cp /etc/prime/prime-boot-selector.service    /usr/lib/systemd/system
-systemctl enable prime-boot-selector
+systemctl enable prime-select
 ```
 
-Service prime-select chooses with whatever driver was previously set by user.
-Service prime-boot-selector sets all things during boot [MUST BE ENABLED]
 If nvidia is set, it will load the NVIDIA modules before starting the Graphical Target.
 Moreover, if an intel config is set but the Intel card was disabled in BIOS (leaving only the dGPU), this service will automatically switch to the nvidia config.
 
