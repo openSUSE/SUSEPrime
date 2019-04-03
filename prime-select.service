@@ -1,6 +1,5 @@
 [Unit]
 Description=SUSEPrime systemd service
-After=multi-user.target 
 Before=display-manager.service 
 
 [Service]
