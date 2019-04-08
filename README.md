@@ -6,17 +6,16 @@ Assumptions
 
 * You are running openSUSE Tumbleweed
 * You don't have bumblebee installed
-* You installed nvidia drivers using http://opensuse-community.org/nvidia.ymp
+* You installed NVIDIA drivers using http://opensuse-community.org/nvidia.ymp
 
 Installation/usage
 ------------------
 
-1. Run "prime-select nvidia" log out and login again, hopefully you are
-   using nvidia GPU. To switch back to intel GPU run "prime-select intel" (modesetting driver) or 
-   "prime-select intel2" (Intel Open Source driver, requires xf86-video-intel package).
-   Remember to run as root.
-2. To check which GPU you're currently using run "prime-select get-current".
-3. In intel configurations, powering off the NVIDIA card with bbswitch to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
+1. Run `sudo prime-select nvidia` log out and login again, hopefully you are
+   using the NVIDIA card. To switch back to te Intel card run `sudo prime-select intel` (modesetting driver) or 
+   `sudo prime-select intel2` (Intel Open Source driver, requires xf86-video-intel package).
+2. To check which video card you're currently using run `/usr/sbin/prime-select get-current`.
+3. On intel configurations, powering off the NVIDIA card with bbswitch to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
 
 Contact
 -------
@@ -44,7 +43,7 @@ Install it with:
 zypper in bbswitch
 ```
 
-### Blacklist the nvidia modules so it can be loaded only when necessary
+### Blacklist the NVIDIA modules so it can be loaded only when necessary
 
 The NVIDIA openSUSE package adds the NVIDIA driver modules to the kernel initrd image. This will make the system always load them on boot. This is problematic for disabling the NVIDIA card with bbswitch as it can only turn off the card when the modules are not loaded. Instead of unloading the modules before making use of bbswitch, the reverse is way easier: have the NVIDIA modules always unloaded and load them only when needed.
 To prevent the modules from being automatically loaded on boot, we need to blacklist them in initrd.
@@ -66,19 +65,20 @@ systemctl enable prime-select
 
 If nvidia is set, it will load the NVIDIA modules before starting the Graphical Target.
 Moreover, if an intel config is set but the Intel card was disabled in BIOS (leaving only the dGPU), this service will automatically switch to the nvidia config.
+The reverse is also true (nvidia config set but BIOS configured to use iGPU only).
 
 
 ## FAQ
 
 ### How do I select a driver ?
 
-prime-select `<driver>`
+sudo prime-select `<driver>`
 
 Where `<driver>` is one of:
 
 - `intel`: use the `modesetting` driver
 - `intel2`: use the `intel` driver (xf86-video-intel)
-- `nvidia`: use the NVIDIA binary driver
+- `nvidia`: use the NVIDIA proprietary driver
 
 
 ### How do I check the current driver configured and the power state of the NVIDIA card ?
