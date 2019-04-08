@@ -5,6 +5,7 @@ Before=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=prime-select systemd_call
+TimeoutSec=30
 
 [Install]
 WantedBy=multi-user.target
