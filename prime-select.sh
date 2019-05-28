@@ -24,13 +24,13 @@ lspci_nvidia_line="VGA compatible controller: NVIDIA"
 # If it is present (suse-prime-bbswitch package), the script assumes that bbswitch is to be used
 # otherwise (suse-prime package) it works without bbswitch 
 [ -f  /usr/lib/systemd/system/prime-select.service ]
-service_test=$?   
+service_test=$?
 
 function usage {
     echo
     echo "NVIDIA/Intel video card selection for NVIDIA Optimus laptops."
     echo
-    
+
     if (( service_test == 0 )); then
 	echo "usage: $(basename $0)           $driver_choices|unset|get-current|get-boot|log-view|log-clean"
 	echo "usage: $(basename $0) boot      $driver_choices|last"
@@ -39,7 +39,7 @@ function usage {
     else
 	echo "usage: $(basename $0) $driver_choices|unset|get-current|log-view|log-clean"
     fi
-    
+
     echo
     echo "nvidia:      use the NVIDIA proprietary driver"
     echo "intel:       use the Intel card with the \"modesetting\" driver"
@@ -202,6 +202,19 @@ EOF
     logging "Intel card correctly set"
 }
 
+function ask_to_logout {
+    while :
+    do
+        read -p "Would you like to logout to apply changes? (y/N)" logout_or_no
+        if [[ "$logout_or_no" == [yY]* ]]; then
+            systemctl restart display-manager.service
+            break
+        elif [[ "$logout_or_no" == [nN]* ]] || [[ -z $logout_or_no ]]; then
+            break
+        fi
+    done
+}
+
 function apply_current {
     if [ -f /etc/prime/current_type ]; then
         
@@ -219,12 +232,12 @@ function apply_current {
             # this can happen if user set nvidia but changed to "Integrated only" in BIOS (possible on some MUXED Optimus laptops)
             # in that case the NVIDIA card is not visible to the system and we must switch to intel
             
-            logging "Forcing intel due to NVIDIA card not found"
-            current_type="intel"
+            logging "Forcing intel due to NVIDIA card not found" current_type="intel"
         fi
         
         
         set_$current_type
+        ask_to_logout
     fi
 }
 
@@ -274,6 +287,7 @@ function logout_switch {
     systemctl stop prime-select
 }
 
+
 case $type in
     
     nvidia|intel|intel2)
@@ -299,8 +313,9 @@ case $type in
         fi
         
         if (( service_test == 0)); then
-	    
-	    if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
+
+        if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
+
     		echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
         	exit 1
        	    fi
