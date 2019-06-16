@@ -17,7 +17,7 @@ prime_logfile="/var/log/prime-select.log"
 nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2"
 lspci_intel_line="VGA compatible controller: Intel"
-lspci_nvidia_line=$(lspci | grep NVIDIA | cut -d ' ' -f 2-3 | sed 's/:$//')
+lspci_nvidia_line=$(lspci | grep NVIDIA | cut -d ' ' -f 2-4)
 
 
 # Check if prime-select systemd service is present (in that case service_test value is 0)
