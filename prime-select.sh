@@ -17,7 +17,8 @@ prime_logfile="/var/log/prime-select.log"
 nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2"
 lspci_intel_line="VGA compatible controller: Intel"
-lspci_nvidia_line="VGA compatible controller: NVIDIA"
+lspci_nvidia_vga_line="VGA compatible controller: NVIDIA"
+lspci_nvidia_3d_line="3D controller: NVIDIA"
 
 
 # Check if prime-select systemd service is present (in that case service_test value is 0)
@@ -214,10 +215,13 @@ function apply_current {
             
             logging "Forcing nvidia due to Intel card not found"
             current_type="nvidia"
-        elif [ "$current_type" = "nvidia" ] && ! lspci | grep "$lspci_nvidia_line" > /dev/null; then
+        elif [ "$current_type" = "nvidia" ] && \
+               ! lspci | grep -q "$lspci_nvidia_vga_line" && \
+               ! lspci | grep -q "$lspci_nvidia_3d_line"; then
             
-            # this can happen if user set nvidia but changed to "Integrated only" in BIOS (possible on some MUXED Optimus laptops)
-            # in that case the NVIDIA card is not visible to the system and we must switch to intel
+            # this can happen if user set nvidia but changed to "Integrated only" in BIOS (possible
+            # on some MUXED Optimus laptops) in that case the NVIDIA card is not visible to the
+            # system and we must switch to intel
             
             logging "Forcing intel due to NVIDIA card not found"
             current_type="intel"
