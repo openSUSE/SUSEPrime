@@ -233,7 +233,7 @@ function apply_current {
 }
 
 function current_check {
-    if [ "$(pgrep -fl "prime-select user_logout_waiter")" > /dev/null ]; then
+    if [ "$(pgrep -f "prime-select user_logout_waiter")" > /dev/null ]; then
         echo "Error: a switch operation already in execution"
         echo "You can undo it using sudo killall prime-select"
         exit 1
@@ -278,6 +278,13 @@ function logout_switch {
     systemctl stop prime-select
 }
 
+function logout_switch_no_dm {
+    apply_current
+    echo "N" > /etc/prime/boot_state
+    systemctl stop prime-select
+}
+
+
 case $type in
     
     nvidia|intel|intel2)
@@ -314,8 +321,13 @@ case $type in
             fi
             
 	    #DM_check
-	    runlev=$(runlevel | awk '{print $2}')
-	    if [ $runlev = 5 ]; then
+	    
+	    # use this to determine current target as this is more reliable than legacy runlevel command that can return 'undefined' or 'N'
+	    # see https://serverfault.com/questions/835515/systemd-how-to-get-the-running-target
+	    # cannot use 'systemctl get-default' as default target may be different than current target
+	    target=$(systemctl list-units --type target | egrep "^multi-user|^graphical" | head -1 | cut -f 1 -d ' ')
+	    
+	    if [ "$target" = "graphical.target" ]; then
 		#GDM_mode
 		if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
 		    $0 user_logout_waiter $type gdm &
@@ -350,17 +362,14 @@ case $type in
 			* ) echo "Aborted. Exit."; exit ;;
 		    esac
 		fi    
-		#manually_started_X_case
-	    elif [ $runlev = 3 ] && [ "$(pgrep -fl "xinit")" > /dev/null ]; then
+	    #manually_started_X_case
+	    elif [ "$target" = "multi-user.target" ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
 		$0 user_logout_waiter $type x_only &
 		logging "user_logout_waiter: started"
 	    else
-		echo "Seems you are on runlevel 3."
-		read -p "Do you want to switch graphics now and reach graphical.target? [y/n]: " choice
-		case "$choice" in
-		    y|Y ) $0 user_logout_waiter $type now ;;
-		    * ) echo "Aborted. Exit."; exit ;;
-		esac
+		echo $type > /etc/prime/current_type
+		apply_current
+		exit 
 	    fi
 
 	else  # no service used
@@ -507,7 +516,9 @@ case $type in
 	;;
 
     user_logout_waiter)
-        
+
+	echo "S" > /etc/prime/boot_state
+	
         currtime=$(date +"%T");
         #manage journalctl to check when X restarted, then jump init 3
         case "$3" in
@@ -548,29 +559,40 @@ case $type in
             
             #manually_started_X_case
             x_only )
-		while [ "$(pgrep -fl "xinit")" > /dev/null ]; do
+		while [ "$(pgrep -x xinit)" > /dev/null ]; do
                     sleep 0.5s
 		done
-		logging "user_logout_waiter: X stop detected, preparing switch to $2 [ boot_state > S ]"
+		logging "user_logout_waiter: X stop detected, preparing switch to $2 [ boot_state > S2 ]"
+
+		# S2 = special switch state to indicate that we must not switch to graphical.target (in systemd_call) since we are using xinit/startx
+		echo "S2" > /etc/prime/boot_state
 		;;
-            now )
-		logging "user_logout_waiter: runlevel 3 mode, preparing switch to $2 [ boot_state > S ]"
-		;;
-        esac
+
+	esac
         
         echo $2 > /etc/prime/current_type
-        echo "S" > /etc/prime/boot_state
+ 
         logging "HotSwitch: Reaching multi-user.target"
-        systemctl isolate multi-user.target
+        systemctl isolate multi-user.target &
 	;;
     
     systemd_call)
 
         #checks if system is booting or switching only
         if [ "$(journalctl -b 0 | grep suse-prime)" > /dev/null ]; then
-            if [ "$(cat /etc/prime/boot_state)" = "S" ]; then
-                logout_switch
-            fi
+
+	    boot_state="$(cat /etc/prime/boot_state)"
+
+	    case $boot_state in
+
+		S)
+                    logout_switch
+		    ;;
+                S2)
+		    logout_switch_no_dm
+		    ;;
+	    esac
+	    
         else
             booting
         fi
