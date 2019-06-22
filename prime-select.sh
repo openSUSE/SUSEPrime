@@ -128,7 +128,7 @@ function update_kdeglobals {
     #
     # The problem is that the laptop panel output name (eDP-1-1 in that example, always listed first) is not the same depending
     # on whether the intel (modesetting), intel2 (intel) or nvidia driver is used, resulting in that variable
-    # not being up-to-date when user switches drivers with this script resulting and scaling not working properly
+    # not being up-to-date when user switches drivers with this script and scaling not working properly
     #
     # code below is a workaround that edits file ~/.config/kdeglobals with the proper panel name 
     # passed as first parameter of this function
