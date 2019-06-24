@@ -20,6 +20,10 @@ lspci_intel_line="VGA compatible controller: Intel"
 lspci_nvidia_vga_line="VGA compatible controller: NVIDIA"
 lspci_nvidia_3d_line="3D controller: NVIDIA"
 
+# name of the laptop panel output as returned by 'xrandr -q'. Driver dependent, because why not
+panel_nvidia=eDP-1-1
+panel_intel=eDP-1
+panel_intel2=eDP1
 
 # Check if prime-select systemd service is present (in that case service_test value is 0)
 # If it is present (suse-prime-bbswitch package), the script assumes that bbswitch is to be used
@@ -109,6 +113,38 @@ function clean_xorg_conf_d {
     rm -f /etc/X11/xorg.conf.d/90-intel.conf
 }
 
+function update_kdeglobals {
+
+    # The KDE kscreen5 module ('Display and Monitor' settings) stores the user-defined scaling for all detected monitors
+    # in file ~/.config/kdeglobals, in the ScreenScaleFactors line. For example:
+    #
+    # ScreenScaleFactors=eDP-1-1=2;DP-0=2;DP-1=2;HDMI-0=2;DP-2=2;DP-3=2;DP-4=2;
+    #
+    # /usr/bin/startkde reads this value and assigns it to environment variable QT_SCREEN_SCALE_FACTORS:
+    #
+    # QT_SCREEN_SCALE_FACTORS=eDP-1-1=2;DP-0=2;DP-1=2;HDMI-0=2;DP-2=2;DP-3=2;DP-4=2;
+    #
+    # The value of this variable is crucial to have KDE scale the QT widgets properly 
+    #
+    # The problem is that the laptop panel output name (eDP-1-1 in that example, always listed first) is not the same depending
+    # on whether the intel (modesetting), intel2 (intel) or nvidia driver is used, resulting in that variable
+    # not being up-to-date when user switches drivers with this script and scaling not working properly
+    #
+    # code below is a workaround that edits file ~/.config/kdeglobals with the proper panel name 
+    # passed as first parameter of this function
+
+    [ -z "$user" ] && return
+    
+    panel_name=${1}
+    
+    kdeglobals="$(sudo -u $user -i eval 'echo -n $HOME')/.config/kdeglobals"
+    
+    if [ -f $kdeglobals ]; then
+	 sudo -u $user sed -i -r "s/(ScreenScaleFactors=)$panel_nvidia|$panel_intel|$panel_intel2/\1$panel_name/" "$kdeglobals"
+	 logging "updated $kdeglobals"
+    fi    
+}
+
 function set_nvidia {
 
     if (( service_test == 0)); then
@@ -145,6 +181,8 @@ EOF
 
     cat $xorg_nvidia_conf | sed 's/PCI:X:X:X/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-nvidia.conf
 
+    update_kdeglobals $panel_nvidia
+    
     echo "nvidia" > /etc/prime/current_type
     logging "NVIDIA card correctly set"
 }
@@ -155,6 +193,7 @@ function set_intel {
     echo "intel" > /etc/prime/current_type
     #jump to common function intel1/intel2
     common_set_intel
+    update_kdeglobals $panel_intel
 }
 
 function set_intel2 {
@@ -162,6 +201,7 @@ function set_intel2 {
     echo "intel2" > /etc/prime/current_type
     #jump to common function intel1/intel2
     common_set_intel
+    update_kdeglobals $panel_intel2
 }
 
 function common_set_intel {
@@ -284,6 +324,9 @@ function logout_switch_no_dm {
     systemctl stop prime-select
 }
 
+function set_user {
+    [ -n "$1" ] && echo $1 > /etc/prime/user
+}
 
 case $type in
     
@@ -326,27 +369,30 @@ case $type in
 	    # see https://serverfault.com/questions/835515/systemd-how-to-get-the-running-target
 	    # cannot use 'systemctl get-default' as default target may be different than current target
 	    target=$(systemctl list-units --type target | egrep "^multi-user|^graphical" | head -1 | cut -f 1 -d ' ')
+
+	    # might be empty if script not invoked by sudo, ie directly by root
+	    user=$SUDO_USER 
 	    
 	    if [ "$target" = "graphical.target" ]; then
 		#GDM_mode
 		if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type gdm &
+		    $0 user_logout_waiter $type gdm $user &
 		    logging "user_logout_waiter: started"
 		    #SDDM_mode
 		elif [ "$(systemctl status display-manager | grep sddm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type sddm &
+		    $0 user_logout_waiter $type sddm $user &
 		    logging "user_logout_waiter: started"
 		    #lightdm_mode
 		elif [ "$(systemctl status display-manager | grep lightdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type lightdm &
+		    $0 user_logout_waiter $type lightdm $user &
 		    logging "user_logout_waiter: started"
 		    #XDM_mode
 		elif [ "$(systemctl status display-manager | grep xdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type xdm &
+		    $0 user_logout_waiter $type xdm $user &
 		    logging "user_logout_waiter: started"
 		    #KDM_mode(uses xdm->calls xdm_mode)
 		elif [ "$(systemctl status display-manager | grep kdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type xdm &
+		    $0 user_logout_waiter $type xdm $user &
 		    logging "user_logout_waiter: started"
 		    #unsupported_dm_force_close_option
 		else
@@ -357,15 +403,16 @@ case $type in
 		    case "$choice" in
 			y|Y ) 
 			    killall xinit 
-			    $0 user_logout_waiter $type now
+			    $0 user_logout_waiter $type now $user
 			    ;;
 			* ) echo "Aborted. Exit."; exit ;;
 		    esac
 		fi    
 	    #manually_started_X_case
 	    elif [ "$target" = "multi-user.target" ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
-		$0 user_logout_waiter $type x_only &
+		$0 user_logout_waiter $type x_only $user &
 		logging "user_logout_waiter: started"
+	    # from console without Xorg running	
 	    else
 		echo $type > /etc/prime/current_type
 		apply_current
@@ -397,7 +444,10 @@ case $type in
                         exit 1
                     fi
                 fi
+		
 	        echo "$2" > /etc/prime/boot
+		set_user $SUDO_USER
+ 
                 $0 get-boot
 	        ;;
 	    
@@ -424,8 +474,11 @@ case $type in
                         exit 1
                     fi
                 fi
+		
                 echo "$2" > /etc/prime/forced_boot
-                $0 get-boot
+		set_user $SUDO_USER
+		
+		$0 get-boot
 	        ;;
 	    
 	    abort)
@@ -470,6 +523,7 @@ case $type in
 	rm /etc/prime/boot_state &> /dev/null
 	rm /etc/prime/boot &> /dev/null
 	rm /etc/prime/forced_boot &> /dev/null
+	rm /etc/prime/user &> /dev/null
 	rm $prime_logfile &> /dev/null
 	;;
     
@@ -571,6 +625,7 @@ case $type in
 	esac
         
         echo $2 > /etc/prime/current_type
+	set_user $4
  
         logging "HotSwitch: Reaching multi-user.target"
         systemctl isolate multi-user.target &
@@ -578,11 +633,15 @@ case $type in
     
     systemd_call)
 
+	# user is used in update_kdeglobals
+	# it is the last user that invoked this script via sudo
+	[ -f /etc/prime/user ] && user=$(cat /etc/prime/user) 
+	
         #checks if system is booting or switching only
         if [ "$(journalctl -b 0 | grep suse-prime)" > /dev/null ]; then
 
-	    boot_state="$(cat /etc/prime/boot_state)"
-
+	    boot_state=$(cat /etc/prime/boot_state)    
+	    
 	    case $boot_state in
 
 		S)
