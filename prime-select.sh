@@ -173,9 +173,10 @@ EOF
 
     nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
 
-    libglx_nvidia=$(update-alternatives --list libglx.so|grep nvidia-libglx.so)
-
-    update-alternatives --set libglx.so $libglx_nvidia > /dev/null
+    if [ -f /usr/lib*/xorg/modules/extensions/nvidia/nvidia-libglx.so ]; then
+        libglx_nvidia=$(update-alternatives --list libglx.so|grep nvidia-libglx.so)
+        update-alternatives --set libglx.so $libglx_nvidia > /dev/null
+    fi
 
     clean_xorg_conf_d 
 
