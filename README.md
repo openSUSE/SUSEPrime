@@ -36,10 +36,21 @@ Recreate your initrd with some special settings, which are needed to enable Dyna
 
 ```
 cp /etc/prime/09-nvidia-modprobe-pm-G05.conf /etc/modprobe.d
+rm /etc/dracut.conf.d/50-nvidia-default.conf
 cp /etc/prime/90-nvidia-dracut-G05.conf      /etc/dracut.conf.d/
 cp /etc/prime/90-nvidia-udev-pm-G05.rules    /etc/udev/rules.d/
 dracut -f
 ```
+
+Unfortunately for now you need to recreate your initrd each time after you updated the nvidia driver packages in that way:
+
+```
+rm /etc/dracut.conf.d/50-nvidia-default.conf
+dracut -f
+```
+
+But we try to get rid of the dracut config file in our nvidia driver
+packages, so hopefully this won't be needed any longer in the future!
 
 NVIDIA power off support with 390.xxx driver (=G04 legacy driver packages)
 --------------------------------------------------------------------------
