@@ -48,7 +48,9 @@ function usage {
     echo
     echo "nvidia:      use the NVIDIA proprietary driver"
     echo "intel:       use the Intel card with the \"modesetting\" driver"
+    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver"
     echo "intel2:      use the Intel card with the \"intel\" Open Source driver (xf86-video-intel)"
+    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver"
     echo "unset:       disable effects of this script and let Xorg decide what driver to use"
     echo "get-current: display driver currently configured"
     echo "log-view:    view logfile"

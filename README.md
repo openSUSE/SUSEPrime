@@ -16,7 +16,7 @@ Installation/usage
    `sudo prime-select intel2` (Intel Open Source driver, requires xf86-video-intel package).
 2. To check which video card you're currently using run `/usr/sbin/prime-select get-current`.
 3. On intel configurations, powering off the NVIDIA card with bbswitch (legacy 390.xxx driver) or DynamicPowerManagement option (current 435.xx driver) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
-4. With current 435.xx driver you can make use of NVIDIA's PRIME Render Offload feature in intel configurations. `Option "AllowNVIDIAGPUScreens"` is already taken care of by intel X configs. You only need to set the _NV* environment variables. Check <https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/primerenderoffload.html> for more details.
+4. With current 435.xx driver you can make use of NVIDIA's PRIME Render Offload feature in intel configurations. `Option "AllowNVIDIAGPUScreens"` is already taken care of by intel X configs. You only need to set the __NV* environment variables. Check <https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/primerenderoffload.html> for more details.
 
 Contact
 -------
@@ -100,8 +100,8 @@ sudo prime-select `<driver>`
 
 Where `<driver>` is one of:
 
-- `intel`: use the `modesetting` driver (PRIME Render Offload possible with 435.xx driver)
-- `intel2`: use the `intel` driver (xf86-video-intel) (PRIME Render Offload possible with 435.xx driver)
+- `intel`: use the `modesetting` driver (PRIME Render Offload possible with >= 435.xx driver)
+- `intel2`: use the `intel` driver (xf86-video-intel) (PRIME Render Offload possible with >= 435.xx driver)
 - `nvidia`: use the NVIDIA proprietary driver
 
 
