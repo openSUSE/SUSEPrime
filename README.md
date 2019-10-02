@@ -15,7 +15,8 @@ Installation/usage
    using the NVIDIA card. To switch back to te Intel card run `sudo prime-select intel` (modesetting driver) or 
    `sudo prime-select intel2` (Intel Open Source driver, requires xf86-video-intel package).
 2. To check which video card you're currently using run `/usr/sbin/prime-select get-current`.
-3. On intel configurations, powering off the NVIDIA card with bbswitch to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
+3. On intel configurations, powering off the NVIDIA card with bbswitch (legacy 390.xxx driver) or DynamicPowerManagement option (current 435.xx driver) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
+4. With current 435.xx driver you can make use of NVIDIA's PRIME Render Offload feature in intel configurations. `Option "AllowNVIDIAGPUScreens"` is already taken care of by intel X configs. You only need to set the __NV* environment variables. Check <https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/primerenderoffload.html> for more details.
 
 Contact
 -------
@@ -28,8 +29,31 @@ Related projects
 
 * SUSEPrimeQT <https://github.com/simopil/SUSEPrimeQt/> Provides a simple GUI for SUSEPrime
 
-NVIDIA power off support
--------------------------
+NVIDIA power off support with 435.xxx driver (=G05 driver packages)
+-------------------------------------------------------------------
+
+Recreate your initrd with some special settings, which are needed to enable DynamicPowerManagement and remove NVIDIA kernel modules from initrd, so some special udev rules can be applied to disable NVIDIA Audio and NVIDIA USB and make runtime PM for NVIDIA GPU active. This is needed as workaround, since NVIDIA Audio/USB currently cannot be enabled at the same time as NVIDIA GPU DynamicPowerManagement. This is easily done with:
+
+```
+cp /etc/prime/09-nvidia-modprobe-pm-G05.conf /etc/modprobe.d
+rm /etc/dracut.conf.d/50-nvidia-default.conf
+cp /etc/prime/90-nvidia-dracut-G05.conf      /etc/dracut.conf.d/
+cp /etc/prime/90-nvidia-udev-pm-G05.rules    /etc/udev/rules.d/
+dracut -f
+```
+
+Unfortunately for now you need to recreate your initrd each time after you updated the nvidia driver packages in that way:
+
+```
+rm /etc/dracut.conf.d/50-nvidia-default.conf
+dracut -f
+```
+
+But we try to get rid of the dracut config file in our nvidia driver
+packages, so hopefully this won't be needed any longer in the future!
+
+NVIDIA power off support with 390.xxx driver (=G04 legacy driver packages)
+--------------------------------------------------------------------------
 
 Powering off the NVIDIA card when not in use is very efficient for significantly decreasing power consumption (thus increase battery life) and temperature. However, this is complicated by the fact that the card can be powered off
 only when the NVIDIA kernel modules are not loaded.
@@ -50,7 +74,7 @@ To prevent the modules from being automatically loaded on boot, we need to black
 This is easily done with:
 
 ```
-cp /etc/prime/09-nvidia-blacklist.conf /etc/modprobe.d
+cp /etc/prime/09-nvidia-modprobe-bbswitch-G04.conf /etc/modprobe.d
 dracut -f
 ```
 
@@ -76,12 +100,12 @@ sudo prime-select `<driver>`
 
 Where `<driver>` is one of:
 
-- `intel`: use the `modesetting` driver
-- `intel2`: use the `intel` driver (xf86-video-intel)
+- `intel`: use the `modesetting` driver (PRIME Render Offload possible with >= 435.xx driver)
+- `intel2`: use the `intel` driver (xf86-video-intel) (PRIME Render Offload possible with >= 435.xx driver)
 - `nvidia`: use the NVIDIA proprietary driver
 
 
-### How do I check the current driver configured and the power state of the NVIDIA card ?
+### How do I check the current driver configured and the power state of the NVIDIA card (390.xxx legacy driver)?
 
 ```
 /usr/sbin/prime-select get-current

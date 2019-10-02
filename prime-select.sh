@@ -48,7 +48,9 @@ function usage {
     echo
     echo "nvidia:      use the NVIDIA proprietary driver"
     echo "intel:       use the Intel card with the \"modesetting\" driver"
+    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver"
     echo "intel2:      use the Intel card with the \"intel\" Open Source driver (xf86-video-intel)"
+    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver"
     echo "unset:       disable effects of this script and let Xorg decide what driver to use"
     echo "get-current: display driver currently configured"
     echo "log-view:    view logfile"
@@ -173,9 +175,10 @@ EOF
 
     nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
 
-    libglx_nvidia=$(update-alternatives --list libglx.so|grep nvidia-libglx.so)
-
-    update-alternatives --set libglx.so $libglx_nvidia > /dev/null
+    if [ -f /usr/lib*/xorg/modules/extensions/nvidia/nvidia-libglx.so ]; then
+        libglx_nvidia=$(update-alternatives --list libglx.so|grep nvidia-libglx.so)
+        update-alternatives --set libglx.so $libglx_nvidia > /dev/null
+    fi
 
     clean_xorg_conf_d 
 
@@ -217,14 +220,24 @@ function common_set_intel {
         logging "Failed to build Intel card bus id"
         exit 1
     fi
-    
+
+    gpu_info=$(nvidia-xconfig --query-gpu-info)
+    # This may easily fail, if no NVIDIA kernel module is available or alike
+    if [ $? -ne 0 ]; then
+        logging "PCI BusID of NVIDIA card could not be detected!"
+        exit 1
+    fi
+
+    # There could be more than on NVIDIA card/GPU; use the first one in that case
+    nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
+
     libglx_xorg=$(update-alternatives --list libglx.so | grep xorg-libglx.so)
 
     update-alternatives --set libglx.so $libglx_xorg > /dev/null     
     
     clean_xorg_conf_d
 
-    cat $conf | sed 's/PCI:X:X:X/'${intel_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
+    cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' -e 's/PCI:Y:Y:Y/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
 
     if (( service_test == 0)); then
 
