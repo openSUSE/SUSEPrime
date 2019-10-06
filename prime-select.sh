@@ -224,8 +224,8 @@ function common_set_intel {
     gpu_info=$(nvidia-xconfig --query-gpu-info)
     # This may easily fail, if no NVIDIA kernel module is available or alike
     if [ $? -ne 0 ]; then
-        logging "PCI BusID of NVIDIA card could not be detected!"
-        exit 1
+        logging "PCI BusID of NVIDIA card could not be detected! If service seems to work correctly you can ignore this message."
+        #exit 1 removed because service fails at boot if nvidia card is default off with bbswitch
     fi
 
     # There could be more than on NVIDIA card/GPU; use the first one in that case
@@ -244,10 +244,10 @@ function common_set_intel {
 	modprobe -r $nvidia_modules
 
 	if [ -f /proc/acpi/bbswitch ]; then        
-            tee /proc/acpi/bbswitch > /dev/null <<EOF 
+           tee /proc/acpi/bbswitch > /dev/null <<EOF 
 OFF
 EOF
-    	fi
+    fi
 	
 	logging "trying switch OFF nvidia: $(bbcheck)"
 	
