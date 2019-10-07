@@ -25,11 +25,16 @@ panel_nvidia=eDP-1-1
 panel_intel=eDP-1
 panel_intel2=eDP1
 
+# Check if prime-select service is enabled. Some users may want to use nvidia prime offloading sometimes so they can disable service temporarily.
+# SusePRIME bbswitch will work as non-bbswitch one
+[ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]
+service_test=$?   
+
 # Check if prime-select systemd service is present (in that case service_test value is 0)
 # If it is present (suse-prime-bbswitch package), the script assumes that bbswitch is to be used
 # otherwise (suse-prime package) it works without bbswitch 
-[ -f  /usr/lib/systemd/system/prime-select.service ]
-service_test=$?   
+[ -f /usr/lib/systemd/system/prime-select.service ]
+service_test_installed=$?
 
 function usage {
     echo
@@ -48,19 +53,19 @@ function usage {
     echo
     echo "nvidia:      use the NVIDIA proprietary driver"
     echo "intel:       use the Intel card with the \"modesetting\" driver"
-    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver"
+    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver with prime-select service DISABLED"
     echo "intel2:      use the Intel card with the \"intel\" Open Source driver (xf86-video-intel)"
-    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver"
+    echo "             PRIME Render Offload possible with >= 435.xx NVIDIA driver with prime-select service DISABLED"
     echo "unset:       disable effects of this script and let Xorg decide what driver to use"
     echo "get-current: display driver currently configured"
     echo "log-view:    view logfile"
     echo "log-clean:   clean logfile"
     
-    if (( service_test == 0 )); then
+    if (( service_test_installed == 0 )); then
 	echo "boot:        select default card at boot or set last used"
 	echo "next-boot:   select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
 	echo "get-boot:    display default card at boot"
-        echo "service:     disable, check or restore prime-select service. Could be useful disabling service"
+    echo "service:     disable, check or restore prime-select service. Could be useful disabling service"
 	echo "             before isolating multi-user.target to prevent service execution."
     fi
     
@@ -91,7 +96,16 @@ function check_root {
 
 function check_service {
     if (( service_test != 0)); then
-	exit 1;
+        if (( service_test_installed != 0)); then
+            echo "SUSE Prime service not installed. bbswitch can't switch off nvidia card"
+            echo "Commands: boot | next-boot | get-boot | service aren't available"
+            exit 1;
+        else
+            echo "SUSE Prime service is DISABLED. bbswitch can't switch off nvidia card"
+            echo "Commands: boot | next-boot | get-boot aren't available"
+            echo "You can re-enable it using "prime-select service restore""
+            exit 1;
+        fi
     fi	
 }
 
@@ -220,38 +234,40 @@ function common_set_intel {
         logging "Failed to build Intel card bus id"
         exit 1
     fi
-
-    gpu_info=$(nvidia-xconfig --query-gpu-info)
-    # This may easily fail, if no NVIDIA kernel module is available or alike
-    if [ $? -ne 0 ]; then
-        logging "PCI BusID of NVIDIA card could not be detected! If service seems to work correctly you can ignore this message."
-        #exit 1 removed because service fails at boot if nvidia card is default off with bbswitch
-    fi
-
-    # There could be more than on NVIDIA card/GPU; use the first one in that case
-    nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
-
-    libglx_xorg=$(update-alternatives --list libglx.so | grep xorg-libglx.so)
-
-    update-alternatives --set libglx.so $libglx_xorg > /dev/null     
     
     clean_xorg_conf_d
-
-    cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' -e 's/PCI:Y:Y:Y/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
-
+    
     if (( service_test == 0)); then
 
-	modprobe -r $nvidia_modules
+        modprobe -r $nvidia_modules
 
-	if [ -f /proc/acpi/bbswitch ]; then        
-           tee /proc/acpi/bbswitch > /dev/null <<EOF 
+        if [ -f /proc/acpi/bbswitch ]; then        
+            tee /proc/acpi/bbswitch > /dev/null <<EOF 
 OFF
 EOF
-    fi
+    	cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' -e '/^# needed for/,+5 s.^.#.' > /etc/X11/xorg.conf.d/90-intel.conf
+    	logging "NVIDIA card will be switched off, NVIDIA offloading will not be available"
+    	fi
 	
 	logging "trying switch OFF nvidia: $(bbcheck)"
 	
+    else
+        
+        gpu_info=$(nvidia-xconfig --query-gpu-info)
+        # This may easily fail, if no NVIDIA kernel module is available or alike
+        if [ $? -ne 0 ]; then
+            logging "PCI BusID of NVIDIA card could not be detected!"
+            exit 1
+        fi
+        # There could be more than on NVIDIA card/GPU; use the first one in that case
+        nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
+        # Setting Xorg conf file with NVIDIA Offloading support. 
+        cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' -e 's/PCI:Y:Y:Y/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
     fi
+    
+    libglx_xorg=$(update-alternatives --list libglx.so | grep xorg-libglx.so)
+
+    update-alternatives --set libglx.so $libglx_xorg > /dev/null     
     
     logging "Intel card correctly set"
 }
@@ -366,78 +382,73 @@ case $type in
         fi
         
         if (( service_test == 0)); then
-	    
-	    if ! [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
-    		echo "ERROR: prime-select service seems broken or disabled by user. Try prime-select service restore"
-        	exit 1
-       	    fi
        	    
        	    if ! { [ "$(bbcheck)" = "[bbswitch] NVIDIA card is ON" ] || [ "$(bbcheck)" = "[bbswitch] NVIDIA card is OFF" ]; }; then
     	        bbcheck
             fi
             
-	    #DM_check
+            #DM_check
 	    
-	    # use this to determine current target as this is more reliable than legacy runlevel command that can return 'undefined' or 'N'
-	    # see https://serverfault.com/questions/835515/systemd-how-to-get-the-running-target
-	    # cannot use 'systemctl get-default' as default target may be different than current target
-	    target=$(systemctl list-units --type target | egrep "^multi-user|^graphical" | head -1 | cut -f 1 -d ' ')
+            # use this to determine current target as this is more reliable than legacy runlevel command that can return 'undefined' or 'N'
+            # see https://serverfault.com/questions/835515/systemd-how-to-get-the-running-target
+            # cannot use 'systemctl get-default' as default target may be different than current target
+            target=$(systemctl list-units --type target | egrep "^multi-user|^graphical" | head -1 | cut -f 1 -d ' ')
 
-	    # might be empty if script not invoked by sudo, ie directly by root
-	    user=$SUDO_USER 
+            # might be empty if script not invoked by sudo, ie directly by root
+            user=$SUDO_USER 
 	    
-	    if [ "$target" = "graphical.target" ]; then
-		#GDM_mode
-		if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type gdm $user &
-		    logging "user_logout_waiter: started"
+            if [ "$target" = "graphical.target" ]; then
+            #GDM_mode
+            if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type gdm $user &
+                logging "user_logout_waiter: started"
 		    #SDDM_mode
-		elif [ "$(systemctl status display-manager | grep sddm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type sddm $user &
-		    logging "user_logout_waiter: started"
+            elif [ "$(systemctl status display-manager | grep sddm)" > /dev/null ]; then
+                $0 user_logout_waiter $type sddm $user &
+                logging "user_logout_waiter: started"
 		    #lightdm_mode
-		elif [ "$(systemctl status display-manager | grep lightdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type lightdm $user &
-		    logging "user_logout_waiter: started"
+            elif [ "$(systemctl status display-manager | grep lightdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type lightdm $user &
+                logging "user_logout_waiter: started"
 		    #XDM_mode
-		elif [ "$(systemctl status display-manager | grep xdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type xdm $user &
-		    logging "user_logout_waiter: started"
+            elif [ "$(systemctl status display-manager | grep xdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type xdm $user &
+                logging "user_logout_waiter: started"
 		    #KDM_mode(uses xdm->calls xdm_mode)
-		elif [ "$(systemctl status display-manager | grep kdm)" > /dev/null ]; then
-		    $0 user_logout_waiter $type xdm $user &
-		    logging "user_logout_waiter: started"
+            elif [ "$(systemctl status display-manager | grep kdm)" > /dev/null ]; then
+                $0 user_logout_waiter $type xdm $user &
+                logging "user_logout_waiter: started"
 		    #unsupported_dm_force_close_option
-		else
-		    echo "Unsupported display-manager, please report this to project page to add support."
-		    echo "Script works even in init 3"
-		    echo "You can force-close session and switch graphics [could be dangerous],"
-		    read -p "ALL UNSAVED DATA IN SESSION WILL BE LOST, CONTINUE? [Y/N]: " choice 
-		    case "$choice" in
-			y|Y ) 
-			    killall xinit 
-			    $0 user_logout_waiter $type now $user
-			    ;;
-			* ) echo "Aborted. Exit."; exit ;;
-		    esac
-		fi    
-	    #manually_started_X_case
-	    elif [ "$target" = "multi-user.target" ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
-		$0 user_logout_waiter $type x_only $user &
-		logging "user_logout_waiter: started"
-	    # from console without Xorg running	
-	    else
-		echo $type > /etc/prime/current_type
-		apply_current
-		exit 
-	    fi
+            else
+                echo "Unsupported display-manager, please report this to project page to add support."
+                echo "Script works even in init 3"
+                echo "You can force-close session and switch graphics [could be dangerous],"
+                read -p "ALL UNSAVED DATA IN SESSION WILL BE LOST, CONTINUE? [Y/N]: " choice 
+                case "$choice" in
+                    y|Y ) 
+                        killall xinit 
+                        $0 user_logout_waiter $type now $user
+                    ;;
+                    * ) echo "Aborted. Exit."; exit ;;
+                esac
+            fi    
+            #manually_started_X_case
+            elif [ "$target" = "multi-user.target" ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
+                $0 user_logout_waiter $type x_only $user &
+                logging "user_logout_waiter: started"
+            # from console without Xorg running	
+            else
+                echo $type > /etc/prime/current_type
+                apply_current
+                exit 
+            fi
 
-	else  # no service used
+        else  # no service used
 
-	    echo $type > /etc/prime/current_type
-	    apply_current
+            echo $type > /etc/prime/current_type
+            apply_current
 
-	fi
+        fi
 	
 	echo -e "Logout to switch graphics"
 	;;
@@ -542,7 +553,11 @@ case $type in
     
     service)
 
-	check_service
+	if (( service_test_installed != 0)); then
+        echo "SUSE Prime service not installed. bbswitch can't switch off nvidia card"
+        echo "Commands: boot | next-boot | get-boot | service aren't available"
+        exit 1;
+    fi
 	
         case $2 in
 	    
