@@ -13,6 +13,7 @@ type=$1
 xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
+xorg_nvidia_prime_render_offload="/etc/prime/xorg-nvidia-prime-render-offload.conf"
 prime_logfile="/var/log/prime-select.log"
 nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2"
@@ -237,6 +238,8 @@ function common_set_intel {
     
     clean_xorg_conf_d
     
+    cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
+    
     if (( service_test == 0)); then
 
         modprobe -r $nvidia_modules
@@ -245,24 +248,25 @@ function common_set_intel {
             tee /proc/acpi/bbswitch > /dev/null <<EOF 
 OFF
 EOF
-    	cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' -e '/^# needed for/,+5 s.^.#.' > /etc/X11/xorg.conf.d/90-intel.conf
     	logging "NVIDIA card will be switched off, NVIDIA offloading will not be available"
     	fi
 	
 	logging "trying switch OFF nvidia: $(bbcheck)"
 	
     else
-        
-        gpu_info=$(nvidia-xconfig --query-gpu-info)
-        # This may easily fail, if no NVIDIA kernel module is available or alike
-        if [ $? -ne 0 ]; then
+        # extra snippet nvidia for NVIDIA's Prime Render Offload mode
+        gpu_info=$(nvidia-xconfig --query-gpu-info 2> /dev/null)
+
+    # This may easily fail, if no NVIDIA kernel module is available or alike
+        if [ $? -eq 0 -a "$gpu_info" != "" ]; then
+            # There could be more than on NVIDIA card/GPU; use the first one in that case
+            nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
+            logging "Adding support for NVIDIA Prime Render Offload"
+            cat $xorg_nvidia_prime_render_offload | sed -e 's/PCI:Y:Y:Y/'${nvidia_busid}'/' >> /etc/X11/xorg.conf.d/90-intel.conf
+        else
             logging "PCI BusID of NVIDIA card could not be detected!"
-            exit 1
+            logging "NVIDIA Prime Render Offload not supported!"
         fi
-        # There could be more than on NVIDIA card/GPU; use the first one in that case
-        nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
-        # Setting Xorg conf file with NVIDIA Offloading support. 
-        cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' -e 's/PCI:Y:Y:Y/'${nvidia_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
     fi
     
     libglx_xorg=$(update-alternatives --list libglx.so | grep xorg-libglx.so)
