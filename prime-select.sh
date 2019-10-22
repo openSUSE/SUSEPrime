@@ -22,9 +22,16 @@ lspci_nvidia_vga_line="VGA compatible controller: NVIDIA"
 lspci_nvidia_3d_line="3D controller: NVIDIA"
 
 # name of the laptop panel output as returned by 'xrandr -q'. Driver dependent, because why not
-panel_nvidia=eDP-1-1
-panel_intel=eDP-1
-panel_intel2=eDP1
+ls /sys/class/drm/ | grep -q LVDS
+if [ $? -eq 0 ]; then
+    panel_nvidia=LVDS-1-1
+    panel_intel=LVDS-1
+    panel_intel2=LVDS1
+else
+    panel_nvidia=eDP-1-1
+    panel_intel=eDP-1
+    panel_intel2=eDP1
+fi
 
 # Check if prime-select service is enabled. Some users may want to use nvidia prime offloading sometimes so they can disable service temporarily.
 # SusePRIME bbswitch will work as non-bbswitch one
