@@ -165,11 +165,14 @@ function update_kdeglobals {
 function restore_old_state {
     if [ -f /etc/prime/current_type.old ]; then
         echo "Reconfiguration failed"
+        logging "Reconfiguration failed"
         mv -f /etc/prime/current_type.old /etc/prime/current_type
-        echo -n "Restoring previous configuration: "
-        cat /etc/prime/current_type
+        config=$(cat /etc/prime/current_type)
+        echo "Restoring previous configuration: $config"
+        logging "Restoring previous configuration: $config"
     else
         echo "Configuration failed"
+        logging "Configuration failed"
         rm /etc/prime/current_type
     fi
 }
