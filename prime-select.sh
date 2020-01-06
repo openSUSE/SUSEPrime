@@ -22,9 +22,16 @@ lspci_nvidia_vga_line="VGA compatible controller: NVIDIA"
 lspci_nvidia_3d_line="3D controller: NVIDIA"
 
 # name of the laptop panel output as returned by 'xrandr -q'. Driver dependent, because why not
-panel_nvidia=eDP-1-1
-panel_intel=eDP-1
-panel_intel2=eDP1
+ls /sys/class/drm/ | grep -q LVDS
+if [ $? -eq 0 ]; then
+    panel_nvidia=LVDS-1-1
+    panel_intel=LVDS-1
+    panel_intel2=LVDS1
+else
+    panel_nvidia=eDP-1-1
+    panel_intel=eDP-1
+    panel_intel2=eDP1
+fi
 
 # Check if prime-select service is enabled. Some users may want to use nvidia prime offloading sometimes so they can disable service temporarily.
 # SusePRIME bbswitch will work as non-bbswitch one
@@ -162,6 +169,33 @@ function update_kdeglobals {
     fi    
 }
 
+function restore_old_state {
+    if [ -f /etc/prime/current_type.old ]; then
+        echo "Reconfiguration failed"
+        logging "Reconfiguration failed"
+        mv -f /etc/prime/current_type.old /etc/prime/current_type
+        config=$(cat /etc/prime/current_type)
+        echo "Restoring previous configuration: $config"
+        logging "Restoring previous configuration: $config"
+    else
+        echo "Configuration failed"
+        logging "Configuration failed"
+        rm /etc/prime/current_type
+    fi
+}
+
+function save_old_state {
+    if [ -f /etc/prime/current_type ]; then
+        cp -f /etc/prime/current_type /etc/prime/current_type.old
+    fi
+}
+
+function remove_old_state {
+    if [ -f /etc/prime/current_type.old ]; then
+        rm /etc/prime/current_type.old
+    fi
+}
+
 function set_nvidia {
 
     if (( service_test == 0)); then
@@ -183,6 +217,7 @@ EOF
     # This may easily fail, if no NVIDIA kernel module is available or alike
     if [ $? -ne 0 ]; then
         logging "PCI BusID of NVIDIA card could not be detected!"
+        restore_old_state
         exit 1
     fi
     
@@ -442,15 +477,19 @@ case $type in
                 logging "user_logout_waiter: started"
             # from console without Xorg running	
             else
+                save_old_state
                 echo $type > /etc/prime/current_type
                 apply_current
+                remove_old_state
                 exit 
             fi
 
         else  # no service used
 
+            save_old_state
             echo $type > /etc/prime/current_type
             apply_current
+            remove_old_state
 
         fi
 	
