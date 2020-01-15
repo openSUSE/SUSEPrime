@@ -73,8 +73,7 @@ function usage {
 	echo "boot:        select default card at boot or set last used"
 	echo "next-boot:   select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
 	echo "get-boot:    display default card at boot"
-    echo "service:     disable, check or restore prime-select service. Could be useful disabling service"
-	echo "             before isolating multi-user.target to prevent service execution."
+    echo "service:     disable, check or restore prime-select service."
     fi
     
     #if (( service_test == 0)); then
@@ -199,17 +198,20 @@ function remove_old_state {
 function set_nvidia {
 
     if (( service_test == 0)); then
-	
+
     	if [ -f /proc/acpi/bbswitch ]; then        
             tee /proc/acpi/bbswitch > /dev/null <<EOF
 ON
 EOF
-  	fi
+        fi
 	
     	logging "trying switch ON nvidia: $(bbcheck)"
-   	
+        currtime=$(date +"%T");
    	# will also load all necessary dependent modules
     	modprobe nvidia_drm
+    	
+    	#waits nvidia modules properly loaded
+		until [ "$(journalctl --since "$currtime" | grep -E "[nvidia-drm]".*"Loading driver")" > /dev/null ]; do echo; done
 
     fi    
     
@@ -276,8 +278,10 @@ function common_set_intel {
     cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
     
     if (( service_test == 0)); then
-
-        modprobe -r $nvidia_modules
+        
+        while [ "$(lsmod | grep nvidia)" > /dev/null ]; do
+            modprobe -r $nvidia_modules
+        done
 
         if [ -f /proc/acpi/bbswitch ]; then        
             tee /proc/acpi/bbswitch > /dev/null <<EOF 
@@ -360,7 +364,7 @@ function booting {
     fi
     if ! [ -f /etc/prime/boot ]; then
         echo "last" > /etc/prime/boot
-    fi
+    fi 
     
     if [ -f /etc/prime/forced_boot ]; then
         echo "$(cat /etc/prime/forced_boot)" > /etc/prime/current_type
@@ -381,8 +385,8 @@ function booting {
 function logout_switch {
     apply_current
     echo "N" > /etc/prime/boot_state
-    logging "HotSwitch: Reaching graphical.target [ boot_state > N ]"
-    systemctl isolate graphical.target &
+    logging "HotSwitch: starting Display Manager [ boot_state > N ]"
+    systemctl start display-manager &
     systemctl stop prime-select
 }
 
@@ -679,7 +683,8 @@ case $type in
 		done
 		logging "user_logout_waiter: X restart detected, preparing switch to $2 [ boot_state > S ]"
 		#stopping display-manager before runlev.3 seems work faster
-		systemctl stop display-manager
+		#systemctl stop display-manager
+		
 		;;
             
             #manually_started_X_case
@@ -698,8 +703,8 @@ case $type in
         echo $2 > /etc/prime/current_type
 	set_user $4
  
-        logging "HotSwitch: Reaching multi-user.target"
-        systemctl isolate multi-user.target &
+        systemctl stop display-manager
+        systemctl start prime-select &
 	;;
     
     systemd_call)
