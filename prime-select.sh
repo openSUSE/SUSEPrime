@@ -588,8 +588,12 @@ case $type in
     unset)
 
 	check_root
-	$0 service disable
+	if (( service_test == 0 )); then
+		$0 service disable
+	fi
 	clean_xorg_conf_d
+	libglx_xorg=$(update-alternatives --list libglx.so | grep xorg-libglx.so)
+	update-alternatives --set libglx.so $libglx_xorg > /dev/null
 	rm /etc/prime/current_type &> /dev/null
 	rm /etc/prime/boot_state &> /dev/null
 	rm /etc/prime/boot &> /dev/null
@@ -610,7 +614,7 @@ case $type in
 	    
 	    check)
 		
-                if [ -f /etc/systemd/system/multi-user.target.wants/prime-select.service ]; then
+                if (( service_test == 0 )); then
 		    echo "prime-select: service is set correctly"
 		    exit
                 fi
