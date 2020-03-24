@@ -66,7 +66,7 @@ To prevent the modules from being automatically loaded on boot, we need to black
 This is easily done with:
 
 ```
-if [ ! test -s /etc/modprobe.d/09-nvidia-modprobe-bbswitch-G04.conf ]; then
+if [ ! -s /etc/modprobe.d/09-nvidia-modprobe-bbswitch-G04.conf ]; then
   cp 09-nvidia-modprobe-bbswitch-G04.conf /etc/modprobe.d && dracut -f
 fi
 ```
