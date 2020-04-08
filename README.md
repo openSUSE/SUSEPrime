@@ -4,7 +4,7 @@ openSUSE nvidia-prime like package
 Assumptions
 -----------
 
-* You are running openSUSE Tumbleweed
+* You are running openSUSE Leap 15.1 or later
 * You don't have bumblebee installed
 * You installed NVIDIA drivers using http://opensuse-community.org/nvidia.ymp
 
@@ -15,8 +15,8 @@ Installation/usage
    using the NVIDIA card. To switch back to te Intel card run `sudo prime-select intel` (modesetting driver) or 
    `sudo prime-select intel2` (Intel Open Source driver, requires xf86-video-intel package).
 2. To check which video card you're currently using run `/usr/sbin/prime-select get-current`.
-3. On intel configurations, powering off the NVIDIA card with bbswitch (legacy 390.xxx driver) or DynamicPowerManagement option (435.xx driver and later) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
-4. With current 435.xx driver and later you can make use of NVIDIA's PRIME Render Offload feature in intel configurations. `Option "AllowNVIDIAGPUScreens"` is already taken care of by intel X configs. You only need to set the __NV* environment variables. Check <https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/primerenderoffload.html> for more details.
+3. On intel configurations, powering off the NVIDIA card with bbswitch (since 390.xxx driver) or DynamicPowerManagement option (since 435.xx driver and Turing GPU or later) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
+4. Since 435.xx driver you can make use of NVIDIA's PRIME Render Offload feature in intel configurations. `Option "AllowNVIDIAGPUScreens"` is already taken care of by intel X configs. You only need to set the __NV* environment variables. Check <https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/primerenderoffload.html> for more details.
 
 Contact
 -------
@@ -29,8 +29,10 @@ Related projects
 
 * SUSEPrimeQT <https://github.com/simopil/SUSEPrimeQt/> Provides a simple GUI for SUSEPrime
 
-NVIDIA power off support with 435.xxx driver and later (=G05 driver packages)
------------------------------------------------------------------------------
+NVIDIA power off support since 435.xxx driver with Turing GPU and later (G05 driver packages)
+----------------------------------------------------------------------------------------------
+
+For detailed requirements of this feature see chapter "PCI-Express Runtime D3 (RTD3) Power Management", section "SUPPORTED CONFIGURATIONS" of NVIDIA driver's README.txt.
 
 Recreate your initrd with some special settings, which are needed to enable DynamicPowerManagement and remove NVIDIA kernel modules from initrd, so some special udev rules can be applied to disable NVIDIA Audio and NVIDIA USB and make runtime PM for NVIDIA GPU active. This is needed as workaround, since NVIDIA Audio/USB currently cannot be enabled at the same time as NVIDIA GPU DynamicPowerManagement. This is easily done with:
 
@@ -44,8 +46,8 @@ test -s /etc/udev/rules.d/90-nvidia-udev-pm-G05.rules || \
   cp 90-nvidia-udev-pm-G05.rules /etc/udev/rules.d/
 ```
 
-NVIDIA power off support with 390.xxx driver (=G04 legacy driver packages)
---------------------------------------------------------------------------
+NVIDIA power off support since 390.xxx driver (G04/G05 driver packages)
+-----------------------------------------------------------------------
 
 Powering off the NVIDIA card when not in use is very efficient for significantly decreasing power consumption (thus increase battery life) and temperature. However, this is complicated by the fact that the card can be powered off
 only when the NVIDIA kernel modules are not loaded.
