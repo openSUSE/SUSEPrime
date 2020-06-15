@@ -15,7 +15,7 @@ Installation/usage
    using the NVIDIA card. To switch back to te Intel card run `sudo prime-select intel` (modesetting driver) or 
    `sudo prime-select intel2` (Intel Open Source driver, requires xf86-video-intel package).
 2. To check which video card you're currently using run `/usr/sbin/prime-select get-current`.
-3. On intel configurations, powering off the NVIDIA card with bbswitch (since 390.xxx driver) or DynamicPowerManagement option (since 435.xx driver and Turing GPU or later) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
+3. In intel-only mode, powering off the NVIDIA card with bbswitch (since 390.xxx driver) or using DynamicPowerManagement option in nvidia/intel mode  (since 435.xx driver and Turing GPU or later) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
 4. Since 435.xx driver you can make use of NVIDIA's PRIME Render Offload feature in intel configurations (Xserver of Leap 15.2 or later needed!). `Option "AllowNVIDIAGPUScreens"` is already taken care of by intel X configs. You only need to set the __NV* environment variables. Check <https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/primerenderoffload.html> for more details.
 
 Contact
