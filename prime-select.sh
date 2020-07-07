@@ -658,7 +658,8 @@ case $type in
             
             gdm )
 		#GDM_mode
-		until [ "$(journalctl --since "$currtime" | grep "pam_unix(gdm-password:session): session closed")" > /dev/null ]; do
+		until [ "$(journalctl --since "$currtime" | grep -e "pam_unix(gdm-password:session): session closed" \
+								 -e "pam_unix(gdm-autologin:session): session closed")" > /dev/null ]; do
                     sleep 0.5s
 		done
 		logging "user_logout_waiter: X restart detected, preparing switch to $2 [ boot_state > S ]"
