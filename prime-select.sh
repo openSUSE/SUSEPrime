@@ -432,15 +432,10 @@ case $type in
             
             #DM_check
 	    
-            # use this to determine current target as this is more reliable than legacy runlevel command that can return 'undefined' or 'N'
-            # see https://serverfault.com/questions/835515/systemd-how-to-get-the-running-target
-            # cannot use 'systemctl get-default' as default target may be different than current target
-            target=$(systemctl list-units --type target | egrep "^multi-user|^graphical" | head -1 | cut -f 1 -d ' ')
-
-            # might be empty if script not invoked by sudo, ie directly by root
+	    # might be empty if script not invoked by sudo, ie directly by root
             user=$SUDO_USER 
 	    
-            if [ "$target" = "graphical.target" ]; then
+            if systemctl is-active graphical.target > /dev/null; then
             #GDM_mode
             if [ "$(systemctl status display-manager | grep gdm)" > /dev/null ]; then
                 $0 user_logout_waiter $type gdm $user &
@@ -476,7 +471,7 @@ case $type in
                 esac
             fi    
             #manually_started_X_case
-            elif [ "$target" = "multi-user.target" ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
+            elif [ "$(systemctl is-active multi-user.target)" > /dev/null ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
                 $0 user_logout_waiter $type x_only $user &
                 logging "user_logout_waiter: started"
             # from console without Xorg running	
