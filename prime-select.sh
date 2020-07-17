@@ -278,9 +278,14 @@ function common_set_intel {
     cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
     
     if (( service_test == 0)); then
-        
-        while [ "$(lsmod | grep nvidia)" > /dev/null ]; do
-            modprobe -r $nvidia_modules
+
+        # try only n times; avoid endless loop which may block system updates forever (boo#1173632)
+        last=3
+        for try in $(seq 1 $last); do
+            modprobe -r $nvidia_modules && break
+            if [ $try -eq $last ]; then
+                echo "NVIDIA kernel modules cannot be unloaded (tried $last times). Your machine may need a reboot."
+            fi
         done
 
         if [ -f /proc/acpi/bbswitch ]; then        
