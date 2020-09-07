@@ -10,10 +10,10 @@
 # Improved by simopil <pilia.simone96@gmail.com>
 
 type=$1
-xorg_nvidia_conf="/etc/prime/xorg-nvidia.conf"
-xorg_intel_conf_intel="/etc/prime/xorg-intel.conf"
-xorg_intel_conf_intel2="/etc/prime/xorg-intel-intel.conf"
-xorg_nvidia_prime_render_offload="/etc/prime/xorg-nvidia-prime-render-offload.conf"
+xorg_nvidia_conf="/usr/share/prime/xorg-nvidia.conf"
+xorg_intel_conf_intel="/usr/share/prime/xorg-intel.conf"
+xorg_intel_conf_intel2="/usr/share/prime/xorg-intel-intel.conf"
+xorg_nvidia_prime_render_offload="/usr/share/prime/xorg-nvidia-prime-render-offload.conf"
 prime_logfile="/var/log/prime-select.log"
 nvidia_modules="ipmi_devintf nvidia_drm nvidia_modeset nvidia_uvm nvidia ipmi_msghandler"
 driver_choices="nvidia|intel|intel2"
@@ -43,6 +43,9 @@ service_test=$?
 # otherwise (suse-prime package) it works without bbswitch 
 [ -f /usr/lib/systemd/system/prime-select.service ]
 service_test_installed=$?
+
+# Make sure /etc/prime exists, so /etc/prime/current_type can be written
+test -d /etc/prime || mkdir -p /etc/prime
 
 function usage {
     echo
