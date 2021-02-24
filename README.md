@@ -119,3 +119,10 @@ Graphics:  Device-1: Intel UHD Graphics 630 driver: i915 v: kernel
            Display: x11 server: X.Org 1.20.4 driver: intel resolution: 3840x2160~60Hz 
            OpenGL: renderer: Mesa DRI Intel UHD Graphics 630 (Coffeelake 3x8 GT2) v: 4.5 Mesa 18.3.4
 ```
+
+### HDMI audio support does not work
+
+Unfortunately HDMI audio support needs to be disabled in order to have DynamicPowerManagement for the NVIDIA GPU available. This is being done by default in the SUSE package. In order to reenable HDMI audio support (BUT: disable again DynamicPowerManagement at the same time!) you need to comment out all the lines in the file ` /usr/lib/udev/rules.d/90-nvidia-udev-pm-G05.rules`, i.e. all lines need to begin with a `#` sign.
+
+In case you disabled HDMI audio support manually (i.e. probably not using a SUSE package) by following the section "NVIDIA power off support since 435.xxx driver with Turing GPU and later (G05 driver packages)" above you need to revert this step, i.e. remove again the file `/etc/udev/rules.d/90-nvidia-udev-pm-G05.rules`.
+
