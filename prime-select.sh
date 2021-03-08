@@ -654,10 +654,15 @@ case $type in
     user_logout_waiter)
 
 	echo "S" > /etc/prime/boot_state
-	
-        currtime=$(date +"%T");
-        #manage journalctl to check when X restarted, then jump init 3
-        case "$3" in
+
+	# only wait for session logout when displayamanger is still running (boo#1182667)
+	if [ "$(systemctl status display-manager | grep "Stopped X Display Manager")" > /dev/null ]; then
+	  # S2 = special switch state to indicate that we must not switch to graphical.target (in systemd_call) since displayamanger is currently not running
+	  echo "S2" > /etc/prime/boot_state
+	else
+	  currtime=$(date +"%T");
+          #manage journalctl to check when X restarted, then jump init 3
+          case "$3" in
             
             gdm )
 		#GDM_mode
@@ -706,8 +711,9 @@ case $type in
 		echo "S2" > /etc/prime/boot_state
 		;;
 
-	esac
-        
+	  esac
+	fi
+
         echo $2 > /etc/prime/current_type
 	set_user $4
  
