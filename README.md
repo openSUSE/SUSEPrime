@@ -15,7 +15,7 @@ Installation/usage
    using the NVIDIA card. To switch back to te Intel card run `sudo prime-select intel` (modesetting driver) or 
    `sudo prime-select intel2` (Intel Open Source driver, requires xf86-video-intel package).
 2. To check which video card you're currently using run `/usr/sbin/prime-select get-current`.
-3. In intel-only mode, powering off the NVIDIA card with bbswitch (since 390.xxx driver) or using DynamicPowerManagement option in nvidia/intel mode  (since 435.xx driver and Turing GPU or later) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
+3. In intel-only mode, powering off the NVIDIA card with bbswitch (since 390.xxx driver) is supported. Using DynamicPowerManagement option in nvidia/intel mode  (since 435.xx driver and Turing GPU or later) to save power and decrease temperature is supported but requires additional manual setup. Refer to instructions below.
 4. Since 435.xx driver you can make use of NVIDIA's PRIME Render Offload feature in intel configurations (Xserver of Leap 15.2 or later needed!). `Option "AllowNVIDIAGPUScreens"` is already taken care of by intel X configs. You only need to set the __NV* environment variables. Check <https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/primerenderoffload.html> for more details.
 
 Contact
@@ -23,6 +23,7 @@ Contact
 
 * Bo Simonsen <bo@geekworld.dk>
 * Michal Srb <msrb@suse.com>
+* Simone Pilia <pilia.simone96@gmail.com>
 
 Related projects
 ----------------
@@ -60,6 +61,7 @@ Install it with:
 ```
 zypper in bbswitch
 ```
+* bbswitch module must be blacklisted, even in initrd, prime-select will load it only when needed
 
 ### Blacklist the NVIDIA modules so it can be loaded only when necessary
 
@@ -75,7 +77,7 @@ fi
 
 This will also blacklist the `nouveau` module which can really get in the way with Optimus and causing black screens.
 
-### Install the systemd services for doing switch and set correct card during boot
+### Install the systemd services to set correct card during boot
 
 ```
 if [ ! -s /usr/lib/systemd/system/prime-select.service ]; then
@@ -84,9 +86,10 @@ if [ ! -s /usr/lib/systemd/system/prime-select.service ]; then
 fi
 ```
 
-If nvidia is set, it will load the NVIDIA modules before starting the Graphical Target.
+- If nvidia is set, it will load the NVIDIA modules before starting the Graphical Target.
 Moreover, if an intel config is set but the Intel card was disabled in BIOS (leaving only the dGPU), this service will automatically switch to the nvidia config.
 The reverse is also true (nvidia config set but BIOS configured to use iGPU only).
+- If intel is set, it will load bbswitch module to set nvidia OFF.
 
 
 ## FAQ
@@ -97,9 +100,12 @@ sudo prime-select `<driver>`
 
 Where `<driver>` is one of:
 
-- `intel`: use the `modesetting` driver (PRIME Render Offload possible with >= 435.xx driver)
-- `intel2`: use the `intel` driver (xf86-video-intel) (PRIME Render Offload possible with >= 435.xx driver)
+- `intel`: use the `modesetting` driver
+- `intel2`: use the `intel` driver (xf86-video-intel) 
 - `nvidia`: use the NVIDIA proprietary driver
+- `offload`: use PRIME Render Offload (possible with >= 435.xx driver)
+
+Full command list available at `sudo prime-select`
 
 
 ### How do I check the current driver configured and the power state of the NVIDIA card (390.xxx legacy driver)?
@@ -125,4 +131,14 @@ Graphics:  Device-1: Intel UHD Graphics 630 driver: i915 v: kernel
 Unfortunately HDMI audio support needs to be disabled in order to have DynamicPowerManagement for the NVIDIA GPU available. This is being done by default in the SUSE package. In order to reenable HDMI audio support (BUT: disable again DynamicPowerManagement at the same time!) you need to comment out all the lines in the file ` /usr/lib/udev/rules.d/90-nvidia-udev-pm-G05.rules`, i.e. all lines need to begin with a `#` sign.
 
 In case you disabled HDMI audio support manually (i.e. probably not using a SUSE package) by following the section "NVIDIA power off support since 435.xxx driver with Turing GPU and later (G05 driver packages)" above you need to revert this step, i.e. remove again the file `/etc/udev/rules.d/90-nvidia-udev-pm-G05.rules`.
+
+### Custom BOOT entries
+
+When service is enabled, the script is capable to recognize following kernel parameters:
+
+```
+nvidia.prime=offload | nvidia.prime=intel | nvidia.prime=intel2 | nvidia.prime=nvidia
+```
+
+So is possible to have custom bootloader entries with all modes.
 
