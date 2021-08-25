@@ -13,11 +13,13 @@ type=$1
 xorg_nvidia_conf="/usr/share/prime/xorg-nvidia.conf"
 xorg_intel_conf_intel="/usr/share/prime/xorg-intel.conf"
 xorg_intel_conf_intel2="/usr/share/prime/xorg-intel-intel.conf"
+xorg_amd_conf="/usr/share/prime/xorg-amd.conf"
 xorg_nvidia_prime_render_offload="/usr/share/prime/xorg-nvidia-prime-render-offload.conf"
 prime_logfile="/var/log/prime-select.log"
 nvidia_modules="ipmi_devintf nvidia_drm nvidia_modeset nvidia_uvm nvidia ipmi_msghandler"
-driver_choices="nvidia|intel|intel2|offload"
+driver_choices="nvidia|intel|intel2|amd|offload"
 lspci_intel_line="VGA compatible controller: Intel"
+lspci_amd_line="VGA compatible controller: Advanced Micro Devices"
 lspci_nvidia_vga_line="VGA compatible controller: NVIDIA"
 lspci_nvidia_3d_line="3D controller: NVIDIA"
 
@@ -31,6 +33,7 @@ else
     panel_nvidia=eDP-1-1
     panel_intel=eDP-1
     panel_intel2=eDP1
+    panel_amd=eDP-1
 fi
 
 # Check if prime-select service is enabled. Some users may want to use nvidia prime offloading sometimes so they can disable service temporarily.
@@ -65,6 +68,7 @@ function usage {
     echo "nvidia:      use the NVIDIA proprietary driver"
     echo "intel:       use the Intel card with the \"modesetting\" driver"
     echo "intel2:      use the Intel card with the \"intel\" Open Source driver (xf86-video-intel)"
+    echo "amd:         use the Amd card with the \"amd\" Open Source driver (xf86-video-amdgpu)"
     echo "offload      PRIME Render Offload possible with >= 435.xx NVIDIA driver"
     echo "offload-set  choose which intel driver use in PRIME Render Offload"
     echo "unset:       disable effects of this script and let Xorg decide what driver to use"
@@ -74,7 +78,7 @@ function usage {
 
     if (( service_test_installed == 0 )); then
         echo "boot:        select default card at boot or set last used"
-        echo "             supports kernel parameter nvidia.prime=intel|intel2|nvidia|offload"
+        echo "             supports kernel parameter nvidia.prime=intel|intel2|nvidia|amd|offload"
         echo "next-boot:   select card ONLY for next boot, it not touches your boot preference. abort: restores next boot to default"
         echo "get-boot:    display default card at boot"
         echo "service:     disable, check or restore prime-select service."
@@ -181,6 +185,7 @@ function nvpwr {
 function clean_xorg_conf_d {
     rm -f /etc/X11/xorg.conf.d/90-nvidia.conf
     rm -f /etc/X11/xorg.conf.d/90-intel.conf
+    rm -f /etc/X11/xorg.conf.d/90-amd.conf
 }
 
 function update_kdeglobals {
@@ -294,7 +299,7 @@ function set_intel {
         echo "intel" > /etc/prime/current_type
     fi
     #jump to common function intel1/intel2
-    common_set_intel
+    common_set "${lspci_intel_line}" 'Intel'
     update_kdeglobals $panel_intel
 }
 
@@ -304,27 +309,41 @@ function set_intel2 {
         echo "intel2" > /etc/prime/current_type
     fi
     #jump to common function intel1/intel2
-    common_set_intel
+    common_set "${lspci_intel_line}" 'Intel'
     update_kdeglobals $panel_intel2
 }
 
-function common_set_intel {
+function set_amd {
+    conf=$xorg_amd_conf
+    if ! [ "$(cat /etc/prime/current_type)" = "offload" ]; then
+        echo "amd" > /etc/prime/current_type
+    fi
+    common_set "${lspci_amd_line}" 'Amd'
+    update_kdeglobals $panel_amd
+
+}
+
+
+function common_set {
     # find Intel card bus id. Without this Xorg may fail to start
-    line=$(lspci | grep "$lspci_intel_line" | head -1)
+    lspci_line=$1
+    constructor=$2
+    lowercase_constructor=$(echo $constructor | tr '[A-Z]' '[a-z]')
+    line=$(lspci | grep "$lspci_line" | head -1)
     if [ $? -ne 0 ]; then
-        logging "Failed to find Intel card with lspci"
+        logging "Failed to find $constructor card with lspci"
         exit 1
     fi
 
-    intel_busid=$(echo $line | cut -f 1 -d ' ' | sed -e 's/\./:/g;s/:/ /g' | awk -Wposix '{printf("PCI:%d:%d:%d\n","0x" $1, "0x" $2, "0x" $3 )}')
+    card_busid=$(echo $line | cut -f 1 -d ' ' | sed -e 's/\./:/g;s/:/ /g' | awk -Wposix '{printf("PCI:%d:%d:%d\n","0x" $1, "0x" $2, "0x" $3 )}')
     if [ $? -ne 0 ]; then
-        logging "Failed to build Intel card bus id"
+        logging "Failed to build $constructor card bus id"
         exit 1
     fi
 
     clean_xorg_conf_d
 
-    cat $conf | sed -e 's/PCI:X:X:X/'${intel_busid}'/' > /etc/X11/xorg.conf.d/90-intel.conf
+    cat $conf | sed -e 's/PCI:X:X:X/'${card_busid}'/' > /etc/X11/xorg.conf.d/90-${lowercase_constructor}.conf
 
     if [ "$(cat /etc/prime/current_type)" = "offload" ]; then
         nvpwr 1
@@ -340,7 +359,7 @@ function common_set_intel {
             # There could be more than on NVIDIA card/GPU; use the first one in that case
             nvidia_busid=$(echo "$gpu_info" | grep -i "PCI BusID" | head -n 1 | sed 's/PCI BusID ://' | sed 's/ //g')
             logging "Adding support for NVIDIA Prime Render Offload"
-            cat $xorg_nvidia_prime_render_offload | sed -e 's/PCI:Y:Y:Y/'${nvidia_busid}'/' >> /etc/X11/xorg.conf.d/90-intel.conf
+            cat $xorg_nvidia_prime_render_offload | sed -e 's/PCI:Y:Y:Y/'${nvidia_busid}'/' >> /etc/X11/xorg.conf.d/90-${lowercase_constructor}.conf
         else
             logging "PCI BusID of NVIDIA card could not be detected!"
             logging "NVIDIA Prime Render Offload not supported!"
@@ -361,20 +380,33 @@ function common_set_intel {
 
     update-alternatives --set libglx.so $libglx_xorg > /dev/null
 
-    logging "Intel card correctly set"
+    logging "$constructor card correctly set"
 }
+
 
 function apply_current {
     if [ -f /etc/prime/current_type ]; then
 
         current_type=$(cat /etc/prime/current_type)
 
-        if [ "$current_type" != "nvidia"  ] && ! lspci | grep "$lspci_intel_line" > /dev/null; then
+        if [ "$current_type" == "intel"  ] || [ "$current_type" == "intel2"  ]
+        then
+
+        if  ! lspci | grep "$lspci_intel_line" > /dev/null; then
 
             # this can happen if user set intel but changed to "Discrete only" in BIOS
             # in that case the Intel card is not visible to the system and we must switch to nvidia
 
             logging "Forcing nvidia due to Intel card not found"
+            current_type="nvidia"
+        fi
+
+        elif [ "$current_type" == "amd"  ] && ! lspci | grep "$lspci_amd_line" > /dev/null; then
+
+            # this can happen if user set intel but changed to "Discrete only" in BIOS
+            # in that case the Intel card is not visible to the system and we must switch to nvidia
+
+            logging "Forcing nvidia due to Amd card not found"
             current_type="nvidia"
         elif [ "$current_type" = "nvidia" ] && \
                ! lspci | grep -q "$lspci_nvidia_vga_line" && \
@@ -387,6 +419,8 @@ function apply_current {
             logging "Forcing intel due to NVIDIA card not found"
             current_type="intel"
         fi
+
+
 
         if [ "$current_type" = "offload" ]; then
             offload_pref_check
@@ -437,8 +471,8 @@ function set_user {
 
 case $type in
 
-    nvidia|intel|intel2|offload)
-
+    nvidia|intel|intel2|offload|amd)
+        echo $type catched
         current_check
         check_root
 
@@ -462,6 +496,13 @@ case $type in
         if [ "$type" = "intel2" ];then
             if ! rpm -q xf86-video-intel > /dev/null; then
                 echo "package xf86-video-intel is not installed";
+                exit 1
+            fi
+        fi
+
+        if [ "$type" = "amd" ];then
+            if ! rpm -q xf86-video-amdgpu > /dev/null; then
+                echo "package xf86-video-amdgpu is not installed";
                 exit 1
             fi
         fi
@@ -508,17 +549,18 @@ case $type in
                     * ) echo "Aborted. Exit."; exit ;;
                 esac
             fi
-        #manually_started_X_case
-        elif [ "$(systemctl is-active multi-user.target)" > /dev/null ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
-            $0 user_logout_waiter $type x_only $user &
-            logging "user_logout_waiter: started"
-        # from console without Xorg running
-        else
-            save_old_state
-            echo $type > /etc/prime/current_type
-            apply_current
-            remove_old_state
-            exit
+
+            #manually_started_X_case
+            elif [ "$(systemctl is-active multi-user.target)" > /dev/null ] && [ "$(pgrep -x xinit)" > /dev/null ]; then
+                $0 user_logout_waiter $type x_only $user &
+                logging "user_logout_waiter: started"
+            # from console without Xorg running
+            else
+                save_old_state
+                echo $type > /etc/prime/current_type
+                apply_current
+                remove_old_state
+                exit
         fi
         echo -e "Logout to switch graphics"
     ;;
@@ -531,6 +573,14 @@ case $type in
                 exit 1
             fi
         fi
+
+        if [ "$2" = "amd" ];then
+            if ! rpm -q xf86-video-amdgpu > /dev/null; then
+                echo "package xf86-video-amdgpu is not installed";
+                exit 1
+            fi
+        fi
+
         if ! nv_offload_capable; then
             echo "ERROR: offloading needs nvidia drivers >= 435.xx"
             exit 1
@@ -554,7 +604,7 @@ case $type in
 
         case $2 in
 
-            nvidia|intel|intel2|last|offload)
+            nvidia|intel|intel2|amd|last|offload)
 
                 if [ "$2" = "intel2" ]; then
                     if ! rpm -q xf86-video-intel > /dev/null; then
@@ -562,6 +612,14 @@ case $type in
                         exit 1
                     fi
                 fi
+
+                if [ "$2" = "amd" ];then
+                    if ! rpm -q xf86-video-amdgpu > /dev/null; then
+                        echo "package xf86-video-amdgpu is not installed";
+                        exit 1
+                    fi
+                fi
+
                 if [ $2 = "offload" ]; then
                     if ! nv_offload_capable; then
                         echo "ERROR: offloading needs nvidia drivers >= 435.xx"
@@ -587,11 +645,18 @@ case $type in
 
         case $2 in
 
-            nvidia|intel|intel2|offload)
+            nvidia|intel|intel2|amd|offload)
 
                 if [ "$2" = "intel2" ]; then
                     if ! rpm -q xf86-video-intel > /dev/null; then
                         echo "package xf86-video-intel is not installed";
+                        exit 1
+                    fi
+                fi
+
+                if [ "$2" = "amd" ];then
+                    if ! rpm -q xf86-video-amdgpu > /dev/null; then
+                        echo "package xf86-video-amdgpu is not installed";
                         exit 1
                     fi
                 fi
@@ -768,7 +833,7 @@ case $type in
                 rm /etc/prime/forced_boot
                 logging "Boot: forcing booting with $(cat /etc/prime/current_type), boot preference ignored"
             else
-                #search kernel "nvidia.prime=intel|intel2|nvidia|offload" parameter
+                #search kernel "nvidia.prime=intel|intel2|nvidia|amd|offload" parameter
                 kparam=$(grep -oP 'nvidia.prime=\K\S+' /proc/cmdline)
                 if [ "$kparam" > /dev/null ]; then
                     case "$kparam" in
@@ -815,7 +880,7 @@ case $type in
             echo "Default at system boot: $(cat /etc/prime/boot)"
         else
             echo "Default at system boot: auto (last)"
-            echo "You can configure it with prime-select boot intel|intel2|nvidia|last"
+            echo "You can configure it with prime-select boot intel|intel2|nvidia|amd|last"
         fi
         if [ -f /etc/prime/forced_boot ]; then
             echo "Next boot forced to $(cat /etc/prime/forced_boot) by user"
