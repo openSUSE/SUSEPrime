@@ -371,6 +371,11 @@ function common_set {
             systemctl stop nvidia-persistenced.service
             systemctl disable nvidia-persistenced.service
         fi
+        # kill all nvidia related process to fix failure to unload nvidia modules (issue#50)
+        nvidia_process=$(lsof -t /dev/nvidia* 2> /dev/null)
+        if [ -n "$nvidia_process" ]; then
+            kill -9 $nvidia_process
+        fi
         # try only n times; avoid endless loop which may block system updates forever (boo#1173632)
         last=3
         for try in $(seq 1 $last); do
