@@ -365,6 +365,12 @@ function common_set {
             logging "NVIDIA Prime Render Offload not supported!"
         fi
     else
+        # https://github.com/Bumblebee-Project/bbswitch/issues/173#issuecomment-703162468
+        # ensure nvidia-persistenced service is not running
+        if systemctl is-active --quiet nvidia-persistenced.service; then
+            systemctl stop nvidia-persistenced.service
+            systemctl disable nvidia-persistenced.service
+        fi
         # try only n times; avoid endless loop which may block system updates forever (boo#1173632)
         last=3
         for try in $(seq 1 $last); do
