@@ -16,7 +16,7 @@ xorg_intel_conf_intel2="/usr/share/prime/xorg-intel-intel.conf"
 xorg_amd_conf="/usr/share/prime/xorg-amd.conf"
 xorg_nvidia_prime_render_offload="/usr/share/prime/xorg-nvidia-prime-render-offload.conf"
 prime_logfile="/var/log/prime-select.log"
-nvidia_modules="ipmi_devintf nvidia_drm nvidia_modeset nvidia_uvm nvidia ipmi_msghandler"
+nvidia_modules="nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 driver_choices="nvidia|intel|intel2|amd|offload"
 lspci_intel_line="VGA compatible controller: Intel"
 lspci_amd_line="VGA compatible controller: Advanced Micro Devices"
@@ -365,6 +365,17 @@ function common_set {
             logging "NVIDIA Prime Render Offload not supported!"
         fi
     else
+        # https://github.com/Bumblebee-Project/bbswitch/issues/173#issuecomment-703162468
+        # ensure nvidia-persistenced service is not running
+        if systemctl is-active --quiet nvidia-persistenced.service; then
+            systemctl stop nvidia-persistenced.service
+            systemctl disable nvidia-persistenced.service
+        fi
+        # kill all nvidia related process to fix failure to unload nvidia modules (issue#50)
+        nvidia_process=$(lsof -t /dev/nvidia* 2> /dev/null)
+        if [ -n "$nvidia_process" ]; then
+            kill -9 $nvidia_process
+        fi
         # try only n times; avoid endless loop which may block system updates forever (boo#1173632)
         last=3
         for try in $(seq 1 $last); do
