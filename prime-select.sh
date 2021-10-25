@@ -50,6 +50,11 @@ service_test_installed=$?
 # Make sure /etc/prime exists, so /etc/prime/current_type can be written
 test -d /etc/prime || mkdir -p /etc/prime
 
+# Make sure tools like modinfo are found also by non-root users (issue#72)
+if (( $EUID != 0 )); then
+    export PATH=/sbin:/usr/sbin:$PATH
+fi
+
 function usage {
     echo
     echo "NVIDIA/Intel video card selection for NVIDIA Optimus laptops."
