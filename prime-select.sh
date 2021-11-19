@@ -129,8 +129,13 @@ function nv_offload_capable {
 function offload_pref_check {
     #checks if there's a preference for nvidia-offloading
     if ! [ -f /etc/prime/offload_type ]; then
-        echo "intel" > /etc/prime/offload_type
-        logging "Using default intel modesetting driver for offloading."
+        if lspci | grep -q "$lspci_amd_line"; then
+            echo "amd" > /etc/prime/offload_type
+            logging "Using default amd modesetting driver for offloading."
+        else
+            echo "intel" > /etc/prime/offload_type
+            logging "Using default intel modesetting driver for offloading."
+        fi
     fi
 }
 
