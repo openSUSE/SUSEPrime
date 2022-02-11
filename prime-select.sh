@@ -144,10 +144,14 @@ function bbcheck {
     if ! [ $(modinfo bbswitch 2> /dev/null | wc -c) = 0 ]; then
         if ! [ "$(lsmod | grep bbswitch)" > /dev/null ]; then
             if [ "$(lsmod | grep nvidia_drm)" > /dev/null ]; then
-                echo "bbswitch not loaded. NVIDIA modules are loaded"
+                echo "NVIDIA modules are loaded"
             else
-                echo "bbswitch not loaded. NVIDIA modules are NOT loaded"
-                echo "if you want energy saving bbswitch should be loaded in intel mode"
+                echo "bbswitch not loaded"
+                echo ""
+                echo "If you want energy saving bbswitch should be loaded in intel mode."
+                echo "For this package 'bbswitch' needs to be installed on your system."
+                echo "Or make use of DynamicPowerManagement on Turing GPUs or later by"
+                echo "switching to suse-prime's 'offload' or 'nvidia' mode."
             fi
         else
             if grep OFF /proc/acpi/bbswitch > /dev/null; then
