@@ -140,8 +140,6 @@ function offload_pref_check {
 }
 
 function bbcheck {
-    #searching module is better than rpm package because there are other bbswitch providers like dkms-bbswitch
-    if ! [ $(modinfo bbswitch 2> /dev/null | wc -c) = 0 ]; then
         if ! [ "$(lsmod | grep bbswitch)" > /dev/null ]; then
             if [ "$(lsmod | grep nvidia_drm)" > /dev/null ]; then
                 echo "NVIDIA modules are loaded"
@@ -164,10 +162,6 @@ function bbcheck {
                 echo "bbswitch is running but seems broken. Cannot get NVIDIA power status"
             fi
         fi
-    else
-        #should never happen with suse-prime-bbswitch package as bbswitch is a dependency
-        echo "bbswitch module not found. NVIDIA card will not be powered off"
-    fi
 }
 
 function nvpwr {
