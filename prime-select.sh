@@ -593,12 +593,19 @@ case $type in
             fi
         fi
 
-        if [ "$2" = "amd" ];then
-            if ! rpm -q xf86-video-amdgpu > /dev/null; then
-                echo "package xf86-video-amdgpu is not installed";
-                exit 1
-            fi
-        fi
+        ###
+        ### no need to check for this; amdgpu/nvidia is not implemented 
+        ### for offload on AMD, only modeset/nvidia; you could run
+        ### "prime-select offload-set intel" on AMD/NVIDIA, but this is
+        ### rather confusing; so just use "prime-select offload" there for
+        ### having modeset/nvidia
+        ###
+        #if [ "$2" = "amd" ];then
+        #    if ! rpm -q xf86-video-amdgpu > /dev/null; then
+        #        echo "package xf86-video-amdgpu is not installed";
+        #        exit 1
+        #    fi
+        #fi
 
         if ! nv_offload_capable; then
             echo "ERROR: offloading needs nvidia drivers >= 435.xx"
