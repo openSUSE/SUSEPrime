@@ -337,13 +337,13 @@ function common_set {
     lspci_line=$1
     constructor=$2
     lowercase_constructor=$(echo $constructor | tr '[A-Z]' '[a-z]')
-    line=$(lspci | grep "$lspci_line" | head -1)
+    line=$(lspci -D | grep "$lspci_line" | head -1)
     if [ $? -ne 0 ]; then
         logging "Failed to find $constructor card with lspci"
         exit 1
     fi
 
-    card_busid=$(echo $line | cut -f 1 -d ' ' | sed -e 's/\./:/g;s/:/ /g' | awk -Wposix '{printf("PCI:%d:%d:%d\n","0x" $1, "0x" $2, "0x" $3 )}')
+    card_busid=$(echo $line | cut -f 1 -d ' ' | sed -e 's/\./:/g;s/:/ /g' | awk -Wposix '{printf("PCI:%d:%d:%d\n","0x" $2, "0x" $3, "0x" $4 )}')
     if [ $? -ne 0 ]; then
         logging "Failed to build $constructor card bus id"
         exit 1
