@@ -220,7 +220,7 @@ function update_kdeglobals {
 
     panel_name=${1}
 
-    kdeglobals="$(sudo -u $user -i eval 'echo -n $HOME')/.config/kdeglobals"
+    kdeglobals="$(sudo -u $user /usr/bin/printenv HOME)/.config/kdeglobals"
 
     if [ -f $kdeglobals ]; then
         sudo -u $user sed -i -r "s/(ScreenScaleFactors=)$panel_nvidia|$panel_intel|$panel_intel2/\1$panel_name/" "$kdeglobals"
