@@ -814,7 +814,7 @@ case $type in
 
             lightdm  )
                 #lightdm_mode
-                until [ "$(journalctl --since "$currtime" -e | grep "pam_unix(lightdm:session): session closed")" > /dev/null ]; do
+                until [ "$(journalctl --since "$currtime" -e | grep "pam_unix(lightdm.*:session): session closed")" > /dev/null ]; do
                     sleep 0.5s
                 done
                 logging "user_logout_waiter: X restart detected, preparing switch to $2"
