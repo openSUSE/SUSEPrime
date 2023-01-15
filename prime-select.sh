@@ -721,11 +721,10 @@ case $type in
         if [ -f /etc/prime/current_type ]; then
             echo -n "Driver configured: "
             cat /etc/prime/current_type
+            bbcheck
         else
             echo "No driver configured."
-            usage
         fi
-        bbcheck
     ;;
 
     unset)
