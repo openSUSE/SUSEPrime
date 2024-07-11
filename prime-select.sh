@@ -379,7 +379,7 @@ function common_set {
      	for name in persistenced powerd
 	do
 	    if systemctl is-active --quiet nvidia-${name}.service; then
-		systemctl disable --now nvidia-powerd.service
+		systemctl disable --now nvidia-${name}.service
             fi
 	done
         # kill all nvidia related process to fix failure to unload nvidia modules (issue#50)
