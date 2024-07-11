@@ -374,11 +374,14 @@ function common_set {
         fi
     else
         # https://github.com/Bumblebee-Project/bbswitch/issues/173#issuecomment-703162468
-        # ensure nvidia-persistenced service is not running
-        if systemctl is-active --quiet nvidia-persistenced.service; then
-            systemctl stop nvidia-persistenced.service
-            systemctl disable nvidia-persistenced.service
-        fi
+        # ensure nvidia-persistenced and nvidia-powerd services are disabled and not running
+	# as they prevent unloading of NVIDIA modules
+     	for name in persistenced powerd
+	do
+	    if systemctl is-active --quiet nvidia-${name}.service; then
+		systemctl disable --now nvidia-powerd.service
+            fi
+	done
         # kill all nvidia related process to fix failure to unload nvidia modules (issue#50)
         nvidia_process=$(lsof -t /dev/nvidia* 2> /dev/null)
         if [ -n "$nvidia_process" ]; then
